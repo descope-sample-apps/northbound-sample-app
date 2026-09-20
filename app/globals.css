@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  /* Northbound palette. Ember is scarce by policy — eyebrow labels and
+     secondary actions only. It loses its signal value if it decorates. */
+  --color-paper: #fbf7f0;
+  --color-surface: #ffffff;
+  --color-ink: #1b2620;
+  --color-spruce: #2e5a4b;
+  --color-spruce-deep: #26493d;
+  --color-ember: #c0572f;
+  --color-muted: #7a8479;
+  --color-rule: #e3dccd;
+
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-variation-settings: "SOFT" 20;
+  letter-spacing: -0.005em;
+}
+
+/* Motion is restricted to cart updates and approval state changes. Anything
+   that animates outside those two cases is a mistake, not a flourish. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
