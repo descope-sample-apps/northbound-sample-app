@@ -36,9 +36,12 @@ const BodySchema = z.object({
 });
 
 /**
- * Exported for the storefront login action and, later, the authorization
- * server — both of which call it through the HTTP route above rather than
- * importing it, so that the network boundary in the demo is a real one.
+ * The credential check itself, exported so the app can run as a single process.
+ *
+ * lib/auth/verify.ts reaches this over HTTP when LEGACY_AUTH_URL is set, and
+ * calls it in-process otherwise. Both paths are server-side; the difference is
+ * whether the demo shows a second hop on the wire, not whether the credential
+ * is exposed. See the note in lib/auth/verify.ts.
  */
 export async function verifyLegacyCredential(
   email: string,
