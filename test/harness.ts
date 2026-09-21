@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createClient, type Client } from '@libsql/client';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
@@ -12,7 +15,13 @@ export type TestDb = {
 };
 
 /**
- * A fresh in-memory database with migrations applied.
+ * A fresh database with migrations applied, in a throwaway temp directory.
+ *
+ * NOT `:memory:`. @libsql/client opens a separate connection to begin a
+ * transaction, and for an in-memory URL that connection gets its own empty
+ * database — so anything wrapped in db.transaction() runs against a blank
+ * schema and every later query fails with "no such table". A temp file is the
+ * smallest change that makes transactions behave the way production does.
  *
  * Every required test in sub-projects B through E — bearer-only enforcement,
  * PKCE, audience validation, ID-JAG issuer validation, the policy truth table,
@@ -20,13 +29,18 @@ export type TestDb = {
  * it is deliberately a little over-built for what sub-project A needs.
  */
 export async function withTestDb(): Promise<TestDb> {
-  const sqlite = createClient({ url: ':memory:' });
+  const dir = mkdtempSync(join(tmpdir(), 'northbound-test-'));
+  const sqlite = createClient({ url: `file:${join(dir, 'test.db')}` });
   const db = drizzle(sqlite, { schema });
   await migrate(db, { migrationsFolder: './drizzle' });
+
   return {
     db,
     sqlite,
-    close: async () => { sqlite.close(); },
+    close: async () => {
+      sqlite.close();
+      rmSync(dir, { recursive: true, force: true });
+    },
   };
 }
 
