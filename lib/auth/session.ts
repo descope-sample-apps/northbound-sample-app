@@ -14,12 +14,19 @@ const TOKEN_PATTERN = /^[0-9a-f]{64}$/;
  * The value below is 32 random bytes rendered as hex. It carries no claims, no
  * signature, and no meaning outside the `sessions` table.
  *
- * This is a STRUCTURAL answer to the requirement that the agent API must never
- * accept a browser session. A JWT session cookie would be SHAPED like a bearer
- * token, and the only thing stopping someone presenting it to /api/* would be
- * a check that a future contributor might not think to preserve. An opaque
- * database token cannot be validated as an access token by any code path —
- * including code written by someone who never read the test.
+ * This removes a whole class of mistake. A JWT session cookie would be SHAPED
+ * like a bearer token: any generic middleware that verifies a signature would
+ * accept it, and the only thing stopping it reaching an API would be a check a
+ * future contributor might not preserve. This value carries no signature and no
+ * claims, so nothing can validate it by inspection — it means something only
+ * after a deliberate lookup against the `sessions` table.
+ *
+ * Be precise about what that does and does not buy. It does NOT make presenting
+ * a session to an API impossible: `resolveSession` below is exported, takes a
+ * string, and would happily answer if some future handler called it. What it
+ * buys is that doing so requires writing that call on purpose. When sub-project
+ * B adds access tokens, they belong in their own table with their own resolver,
+ * so the two can never be confused by a shared code path.
  *
  * This module deliberately has no Next.js imports so that it stays usable from
  * plain Node (tests today, the authorization server in sub-project C).

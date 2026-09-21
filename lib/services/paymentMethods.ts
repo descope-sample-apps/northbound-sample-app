@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
-import { paymentMethods, type PaymentMethod } from '@/db/schema';
+import { orders, paymentMethods, type PaymentMethod } from '@/db/schema';
 import { NotFoundError, ValidationError } from './errors';
 
 // ============================================================================
@@ -61,11 +61,27 @@ export async function addPaymentMethod(
 }
 
 export async function deletePaymentMethod(customerId: number, id: number): Promise<void> {
-  const deleted = await db.delete(paymentMethods)
+  const [exists] = await db.select().from(paymentMethods)
     .where(and(eq(paymentMethods.id, id), eq(paymentMethods.customerId, customerId)))
-    .returning();
+    .limit(1);
+  if (!exists) throw new NotFoundError('Payment method');
 
-  if (deleted.length === 0) throw new NotFoundError('Payment method');
+  // orders.payment_method_id is a real foreign key — see the matching note in
+  // addresses.ts. Deleting a card a past order references would surface a raw
+  // constraint error to the customer.
+  const [used] = await db.select({ id: orders.id }).from(orders)
+    .where(eq(orders.paymentMethodId, id))
+    .limit(1);
+
+  if (used) {
+    throw new ValidationError(
+      'This payment method is used by past orders and cannot be removed. '
+      + 'Add a new one and make it your default instead.',
+    );
+  }
+
+  await db.delete(paymentMethods)
+    .where(and(eq(paymentMethods.id, id), eq(paymentMethods.customerId, customerId)));
 }
 
 export async function setDefaultPaymentMethod(

@@ -20,7 +20,15 @@ function stripComments(source: string): string {
     .replace(/^\s*\/\/.*$/gm, '');
 }
 
-const STOREFRONT_DIRS = ['app', 'lib/services', 'components'];
+// `lib` is included deliberately. An earlier version of this file scanned only
+// ['app', 'lib/services', 'components'], which meant the enforcement test could
+// not see lib/auth/ — the very directory where the credential code lives, and
+// where sub-project B will add OAuth code. A guard with a blind spot over the
+// thing it guards is worse than no guard, because it reports green.
+const STOREFRONT_DIRS = ['app', 'lib', 'components'];
+
+/** The one module the spec permits to reach the legacy credential store. */
+const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
 
 describe('sub-project A contains no agent concepts', () => {
   // The thesis of this project is that agent access is GRAFTED ONTO a retailer
@@ -32,7 +40,7 @@ describe('sub-project A contains no agent concepts', () => {
     const offenders: string[] = [];
 
     for (const file of STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))) {
-      if (file.startsWith(join('app', 'legacy-auth'))) continue;
+      if (file === LEGACY_ROUTE) continue;
 
       const code = stripComments(readFileSync(file, 'utf8'));
       const matches = code.match(
@@ -52,12 +60,37 @@ describe('sub-project A contains no agent concepts', () => {
 });
 
 describe('the legacy credential store stays isolated', () => {
-  it('is imported by exactly one module', () => {
+  it('has its schema imported by exactly one module', () => {
     const importers = STOREFRONT_DIRS
       .flatMap((d) => sourceFiles(d))
       .filter((file) => /schema\/legacy/.test(readFileSync(file, 'utf8')));
 
-    expect(importers).toEqual([join('app', 'legacy-auth', 'verify', 'route.ts')]);
+    expect(importers).toEqual([LEGACY_ROUTE]);
+  });
+
+  // Spec 3.3 says every caller other than the route handler reaches the legacy
+  // backend OVER HTTP. lib/auth/verify.ts imports the route's exported checker
+  // and calls it in process whenever LEGACY_AUTH_URL is unset — which is the
+  // default, so the app runs as one process with no second service.
+  //
+  // That is a deliberate, documented deviation, not an accident. This test
+  // pins it to exactly one file so a second in-process caller cannot appear
+  // quietly, and so the exemption stays visible to anyone reading the suite.
+  it('is called in process by exactly one documented module', () => {
+    const importers = STOREFRONT_DIRS
+      .flatMap((d) => sourceFiles(d))
+      .filter((file) => file !== LEGACY_ROUTE)
+      .filter((file) =>
+        /from\s+['"]@\/app\/legacy-auth\/verify\/route['"]/
+          .test(stripComments(readFileSync(file, 'utf8'))));
+
+    expect(importers).toEqual([join('lib', 'auth', 'verify.ts')]);
+  });
+
+  it('documents the env var that turns the HTTP hop on', () => {
+    const example = readFileSync('.env.example', 'utf8');
+    expect(example).toMatch(/LEGACY_AUTH_URL/);
+    expect(example).toMatch(/LEGACY_AUTH_SERVICE_TOKEN/);
   });
 });
 

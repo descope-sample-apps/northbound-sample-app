@@ -64,3 +64,19 @@ export class PriceChangedError extends ServiceError {
     super(`Price changed: expected ${expectedCents}, now ${actualCents}`);
   }
 }
+
+/**
+ * The database could not be written to because something else was writing.
+ *
+ * SQLite allows a single writer at a time, and @libsql/client opens a separate
+ * connection per transaction, so two checkouts a second apart contend for the
+ * write lock even when they touch no row in common. Without this, the loser
+ * receives a raw LibsqlError — which is not a ServiceError, escapes the service
+ * layer's contract, and reaches the customer as an unhandled crash.
+ */
+export class ConcurrencyError extends ServiceError {
+  readonly code = 'busy';
+  constructor() {
+    super('Someone else was checking out at the same moment. Please try again.');
+  }
+}

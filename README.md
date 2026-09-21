@@ -35,7 +35,7 @@ Optional: `cp .env.example .env.local`. Every value has a working default.
 | Email | Password | What it demonstrates |
 | --- | --- | --- |
 | `alice@example.com` | `alpine-trail-2019` | The ordinary case. Verified email, eight orders, two addresses, two cards. |
-| `bob@example.com` | `northbound-legacy-99` | **A 2019 account whose password Northbound does not hold.** `customers.password_hash` is `NULL`; the credential lives only in a simulated legacy backend reached over HTTP. Email never verified. |
+| `bob@example.com` | `northbound-legacy-99` | **A 2019 account whose password Northbound does not hold.** `customers.password_hash` is `NULL`; the credential lives only in a simulated legacy backend. Email never verified. |
 | `carol@example.com` | `summit-ridge-4410` | Signed up with Google in 2023 and set a password in 2024. Her `signup_origin` is `google`, which matters once identity linking exists. |
 
 Bob is the interesting one. Signing in as him exercises
@@ -66,16 +66,29 @@ collide with the bearer-only rule that namespace is going to enforce.
 
 1. **Where the credential is entered** — [`app/login/actions.ts`](app/login/actions.ts)
    and [`lib/auth/verify.ts`](lib/auth/verify.ts). The password arrives from
-   Northbound's own form and is either checked locally or forwarded server-side
-   to the legacy service. It is never stored, logged, or exposed to any client.
-   This is the Descope Generic HTTP Connector pattern.
+   Northbound's own form and is either checked locally or handed to the legacy
+   service. It is never stored, logged, or exposed to any client. This is the
+   Descope Generic HTTP Connector pattern.
+
+   By default that hand-off is an in-process call, so the app runs as a single
+   service with nothing else to start. Set `LEGACY_AUTH_URL` (see
+   [`.env.example`](.env.example)) to make it a real server-to-server HTTP
+   request — worth doing when you want the boundary visible on a request trace.
+   Either way the credential stays server-side; the env var changes whether the
+   hop is observable, not whether it is safe.
 
 2. **Why the session cookie is opaque** — [`lib/auth/session.ts`](lib/auth/session.ts).
    `nb_session` is 32 random bytes with no claims and no signature, meaningless
    outside the `sessions` table. A JWT session cookie would be *shaped* like a
-   bearer token, and only a check would stop it being presented to an API. An
-   opaque database token cannot be validated as an access token by any code
-   path, including code written by someone who never read the test.
+   bearer token: generic middleware that verifies a signature would accept it,
+   and only a deliberate check would stop it reaching an API. This value cannot
+   be validated by inspection at all.
+
+   To be precise about what that buys: it does not make presenting a session to
+   an API impossible — `resolveSession` is exported and would answer if some
+   future handler called it. It makes doing so an explicit act rather than an
+   accident of shape, which is why access tokens will live in their own table
+   with their own resolver.
 
 3. **Ownership scoping** — every service function. The ancestor of every
    authorization test this project will need.
@@ -93,12 +106,13 @@ Next.js 16 (App Router), TypeScript, Tailwind v4, Drizzle ORM over
 pnpm test
 ```
 
-185 tests across 20 files. Beyond the ordinary coverage, these are the ones
+197 tests across 21 files. Beyond the ordinary coverage, these are the ones
 worth knowing about:
 
 | Test | What it pins down |
 | --- | --- |
-| `boundaries.test.ts` | No OAuth/agent/scope vocabulary in storefront code; the legacy schema has exactly one importer; only services import the database client; nothing anywhere can hold a card number |
+| `boundaries.test.ts` | No OAuth/agent/scope vocabulary anywhere in `app/`, `lib/` or `components/`; the legacy schema has exactly one importer and exactly one in-process caller; only services import the database client; nothing anywhere can hold a card number |
+| `concurrency-constraints.test.ts` | Simultaneous checkouts by unrelated customers all succeed instead of one dying on a database lock; deleting an address or card a past order used is refused with a readable reason rather than a constraint error; a customer's first cart read survives the layout and the page racing each other |
 | `services-orders.test.ts` | Concurrent checkout cannot oversell the last unit or issue a duplicate order number |
 | `services-orders.test.ts` | A product deactivated or sold out *after* being added to a cart fails checkout by name, not with a 500 |
 | `services-orders.test.ts` | A price that moves between display and checkout raises `PriceChangedError` instead of silently charging a different total |

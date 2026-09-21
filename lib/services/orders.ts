@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
 import {
@@ -6,6 +6,7 @@ import {
   type Address, type Order, type OrderItem, type PaymentMethod,
 } from '@/db/schema';
 import { calcTotals } from '@/lib/money';
+import { withWriteLock } from './writeLock';
 import {
   NotFoundError, OutOfStockError, OwnershipError, PriceChangedError, ValidationError,
 } from './errors';
@@ -40,7 +41,10 @@ export async function placeOrder(
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
   const input = parsed.data;
 
-  return db.transaction(async (tx) => {
+  // Serialized by withWriteLock: SQLite permits one writer at a time, so two
+  // unrelated checkouts contend for the lock even when they share no row, and a
+  // contended transaction cannot be retried. See lib/services/writeLock.ts.
+  return withWriteLock(() => db.transaction(async (tx) => {
     const [cart] = await tx.select().from(carts)
       .where(eq(carts.customerId, customerId)).limit(1);
     if (!cart) throw new ValidationError('Your cart is empty');
@@ -96,9 +100,21 @@ export async function placeOrder(
     }
 
     for (const { item, product } of lines) {
-      await tx.update(products)
-        .set({ stockQty: product.stockQty - item.quantity })
-        .where(eq(products.id, product.id));
+      // Relative UPDATE with a guard, not read-then-write. The guard is what
+      // keeps this correct on an engine without SQLite's single-writer lock —
+      // DATABASE_URL is documented as repointable at hosted libsql, where a
+      // lost update would oversell silently rather than failing loudly.
+      const updated = await tx.update(products)
+        .set({ stockQty: sql`${products.stockQty} - ${item.quantity}` })
+        .where(and(
+          eq(products.id, product.id),
+          gte(products.stockQty, item.quantity),
+        ))
+        .returning({ id: products.id });
+
+      if (updated.length === 0) {
+        throw new OutOfStockError(product.name, product.stockQty);
+      }
     }
 
     // orders.order_number is UNIQUE. If two transactions ever computed the same
@@ -135,7 +151,7 @@ export async function placeOrder(
     await tx.delete(cartItems).where(eq(cartItems.cartId, cart.id));
 
     return order;
-  });
+  }));
 }
 
 export async function listOrders(

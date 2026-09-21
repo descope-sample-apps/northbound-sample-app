@@ -53,13 +53,23 @@ async function getOrCreateCart(customerId: number) {
 
   if (existing) return existing;
 
+  // Upsert rather than read-then-insert. `carts.customer_id` is UNIQUE, and a
+  // customer's first authenticated page load makes two simultaneous calls here:
+  // the root layout's Nav reads the cart at the same time as the page body. A
+  // plain insert loses that race with a constraint violation on an empty cart.
   const now = new Date();
-  const [created] = await db
+  await db
     .insert(carts)
     .values({ customerId, createdAt: now, updatedAt: now })
-    .returning();
+    .onConflictDoNothing({ target: carts.customerId });
 
-  return created;
+  const [cart] = await db
+    .select()
+    .from(carts)
+    .where(eq(carts.customerId, customerId))
+    .limit(1);
+
+  return cart;
 }
 
 async function touch(cartId: number) {

@@ -1,5 +1,6 @@
 import { AddressForm } from '@/components/brand/AccountForms';
 import { ButtonLink } from '@/components/brand/Button';
+import { RowActionButton } from '@/components/brand/RowActions';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { listAddresses } from '@/lib/services/addresses';
 import { deleteAddressAction, setDefaultAddressAction } from '../actions';
@@ -35,27 +36,22 @@ export default async function AddressesPage() {
                 {address.city}, {address.region} {address.postalCode}
               </address>
 
-              <div className="mt-4 flex items-center gap-5">
+              <div className="mt-4 flex flex-wrap items-start gap-5">
                 {!address.isDefault && (
-                  <form action={setDefaultAddressAction}>
-                    <input type="hidden" name="id" value={address.id} />
-                    <button
-                      type="submit"
-                      className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted hover:text-spruce"
-                    >
-                      Make default
-                    </button>
-                  </form>
+                  <RowActionButton
+                    action={setDefaultAddressAction}
+                    id={address.id}
+                    label="Make default"
+                    pendingLabel="Saving…"
+                  />
                 )}
-                <form action={deleteAddressAction}>
-                  <input type="hidden" name="id" value={address.id} />
-                  <button
-                    type="submit"
-                    className="text-[10px] font-semibold uppercase tracking-[0.13em] text-ember hover:underline"
-                  >
-                    Delete
-                  </button>
-                </form>
+                <RowActionButton
+                  action={deleteAddressAction}
+                  id={address.id}
+                  label="Delete"
+                  pendingLabel="Deleting…"
+                  tone="ember"
+                />
               </div>
             </li>
           ))}

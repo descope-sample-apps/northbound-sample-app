@@ -70,3 +70,28 @@ describe('verifyCredentials', () => {
     expect(await verifyCredentials('alice@example.com', '')).toEqual({ ok: false });
   });
 });
+
+describe('legacy backend misconfiguration', () => {
+  afterEach(() => { delete process.env.LEGACY_AUTH_URL; });
+
+  // Sending an empty service token makes the backend answer 401, which would
+  // otherwise collapse into "wrong password" and blame the customer for an
+  // operator's half-finished configuration.
+  it('refuses to run with a URL but no service token', async () => {
+    process.env.LEGACY_AUTH_URL = 'http://localhost:9/legacy-auth/verify';
+    delete process.env.LEGACY_AUTH_SERVICE_TOKEN;
+
+    const { verifyCredentials } = await import('@/lib/auth/verify');
+    await expect(verifyCredentials('bob@example.com', 'legacy-pass-2019'))
+      .rejects.toThrow(/LEGACY_AUTH_SERVICE_TOKEN/);
+  });
+
+  it('reports an unreachable backend as an outage, not a bad password', async () => {
+    process.env.LEGACY_AUTH_URL = 'http://127.0.0.1:9/legacy-auth/verify';
+    process.env.LEGACY_AUTH_SERVICE_TOKEN = 'test-token';
+
+    const { verifyCredentials } = await import('@/lib/auth/verify');
+    await expect(verifyCredentials('bob@example.com', 'legacy-pass-2019'))
+      .rejects.toThrow(/unreachable/i);
+  });
+});

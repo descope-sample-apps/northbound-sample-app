@@ -336,12 +336,17 @@ Commented as described in §4.2.
 **6.2 Why the session cookie is opaque.** `sessions.id` is 32 random bytes. It
 carries no claims, no signature, and no meaning outside the `sessions` table.
 
-This is a structural answer to the parent spec's hard requirement that `/api/*`
-must never accept the browser session. A JWT session cookie would be *shaped* like
-a bearer token, and the only thing stopping someone presenting it to the API would
-be a check that a future contributor might not think to preserve. An opaque
-database token is **incapable** of being validated as an access token by any code
-path, including code written by someone who never read the test.
+This removes a class of mistake rather than making the mistake impossible, and
+the difference is worth stating precisely. A JWT session cookie would be
+*shaped* like a bearer token: generic middleware that verifies a signature would
+accept it, and only a deliberate check would stop it reaching the API. An opaque
+token carries no signature and no claims, so nothing can validate it by
+inspection — it means something only after a lookup against the `sessions` table.
+
+It does **not** prevent a future handler from calling `resolveSession` on its
+own. What it guarantees is that doing so is an explicit act rather than an
+accident of shape. Sub-project B must therefore keep access tokens in their own
+table with their own resolver, so no shared code path can confuse the two.
 
 **6.3 Ownership scoping.** Rule 2 of §5.1. Commented at the service layer as the
 single place customer isolation is enforced.

@@ -74,15 +74,21 @@ export async function saveAddressAction(
   );
 }
 
-export async function deleteAddressAction(formData: FormData): Promise<void> {
-  await run(
+export async function deleteAddressAction(
+  _previous: AccountState,
+  formData: FormData,
+): Promise<AccountState> {
+  return run(
     (customerId) => deleteAddress(customerId, asNumber(formData.get('id'))),
     ['/account/addresses', '/checkout'],
   );
 }
 
-export async function setDefaultAddressAction(formData: FormData): Promise<void> {
-  await run(
+export async function setDefaultAddressAction(
+  _previous: AccountState,
+  formData: FormData,
+): Promise<AccountState> {
+  return run(
     (customerId) => setDefaultAddress(customerId, asNumber(formData.get('id'))),
     ['/account/addresses', '/checkout'],
   );
@@ -105,15 +111,21 @@ export async function addPaymentMethodAction(
   );
 }
 
-export async function deletePaymentMethodAction(formData: FormData): Promise<void> {
-  await run(
+export async function deletePaymentMethodAction(
+  _previous: AccountState,
+  formData: FormData,
+): Promise<AccountState> {
+  return run(
     (customerId) => deletePaymentMethod(customerId, asNumber(formData.get('id'))),
     ['/account/payment-methods', '/checkout'],
   );
 }
 
-export async function setDefaultPaymentMethodAction(formData: FormData): Promise<void> {
-  await run(
+export async function setDefaultPaymentMethodAction(
+  _previous: AccountState,
+  formData: FormData,
+): Promise<AccountState> {
+  return run(
     (customerId) => setDefaultPaymentMethod(customerId, asNumber(formData.get('id'))),
     ['/account/payment-methods', '/checkout'],
   );

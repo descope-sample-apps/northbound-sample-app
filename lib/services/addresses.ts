@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
-import { addresses, type Address } from '@/db/schema';
+import { addresses, orders, type Address } from '@/db/schema';
 import { NotFoundError, ValidationError } from './errors';
 
 const AddressSchema = z.object({
@@ -78,11 +78,29 @@ export async function upsertAddress(
 }
 
 export async function deleteAddress(customerId: number, id: number): Promise<void> {
-  const deleted = await db.delete(addresses)
+  const [exists] = await db.select().from(addresses)
     .where(and(eq(addresses.id, id), eq(addresses.customerId, customerId)))
-    .returning();
+    .limit(1);
+  if (!exists) throw new NotFoundError('Address');
 
-  if (deleted.length === 0) throw new NotFoundError('Address');
+  // orders.shipping_address_id is a real foreign key, so deleting an address a
+  // past order points at raises SQLITE_CONSTRAINT_FOREIGNKEY — a driver error,
+  // not a ServiceError, which would reach the customer as a crash. Every seeded
+  // order uses its customer's default address, so this is reachable on the
+  // first click for anyone with one saved address.
+  const [used] = await db.select({ id: orders.id }).from(orders)
+    .where(eq(orders.shippingAddressId, id))
+    .limit(1);
+
+  if (used) {
+    throw new ValidationError(
+      'This address is used by past orders and cannot be removed. '
+      + 'Add a new one and make it your default instead.',
+    );
+  }
+
+  await db.delete(addresses)
+    .where(and(eq(addresses.id, id), eq(addresses.customerId, customerId)));
 }
 
 export async function setDefaultAddress(customerId: number, id: number): Promise<void> {

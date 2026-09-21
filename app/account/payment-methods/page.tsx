@@ -1,5 +1,6 @@
 import { PaymentMethodForm } from '@/components/brand/AccountForms';
 import { ButtonLink } from '@/components/brand/Button';
+import { RowActionButton } from '@/components/brand/RowActions';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { listPaymentMethods } from '@/lib/services/paymentMethods';
 import { deletePaymentMethodAction, setDefaultPaymentMethodAction } from '../actions';
@@ -45,27 +46,22 @@ export default async function PaymentMethodsPage() {
                 {String(card.expMonth).padStart(2, '0')}/{card.expYear}
               </p>
 
-              <div className="mt-4 flex items-center gap-5">
+              <div className="mt-4 flex flex-wrap items-start gap-5">
                 {!card.isDefault && (
-                  <form action={setDefaultPaymentMethodAction}>
-                    <input type="hidden" name="id" value={card.id} />
-                    <button
-                      type="submit"
-                      className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted hover:text-spruce"
-                    >
-                      Make default
-                    </button>
-                  </form>
+                  <RowActionButton
+                    action={setDefaultPaymentMethodAction}
+                    id={card.id}
+                    label="Make default"
+                    pendingLabel="Saving…"
+                  />
                 )}
-                <form action={deletePaymentMethodAction}>
-                  <input type="hidden" name="id" value={card.id} />
-                  <button
-                    type="submit"
-                    className="text-[10px] font-semibold uppercase tracking-[0.13em] text-ember hover:underline"
-                  >
-                    Delete
-                  </button>
-                </form>
+                <RowActionButton
+                  action={deletePaymentMethodAction}
+                  id={card.id}
+                  label="Delete"
+                  pendingLabel="Deleting…"
+                  tone="ember"
+                />
               </div>
             </li>
           ))}

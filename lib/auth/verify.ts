@@ -25,16 +25,38 @@ async function callLegacyBackend(
   const url = process.env.LEGACY_AUTH_URL;
   if (!url) return verifyLegacyCredential(email, password);
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'X-Legacy-Service-Token': process.env.LEGACY_AUTH_SERVICE_TOKEN ?? '',
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  const token = process.env.LEGACY_AUTH_SERVICE_TOKEN;
+  if (!token) {
+    // Fail loudly. Sending an empty token makes the backend answer 401, which
+    // would collapse into "wrong password" below and leave an operator staring
+    // at a login form wondering why one account stopped working.
+    throw new Error(
+      'LEGACY_AUTH_URL is set but LEGACY_AUTH_SERVICE_TOKEN is not. '
+      + 'The legacy backend rejects unauthenticated callers; set both or neither.',
+    );
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-Legacy-Service-Token': token },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (cause) {
+    // Unreachable backend is an outage, not a bad password. Saying otherwise
+    // would tell the customer their own credential is wrong.
+    throw new Error(`Legacy auth backend at ${url} is unreachable`, { cause });
+  }
+
+  // 401/403 means WE are not authenticated to the backend; 5xx means it is
+  // broken. Neither is a statement about this customer's password.
+  if (res.status === 401 || res.status === 403 || res.status >= 500) {
+    throw new Error(`Legacy auth backend rejected this service: HTTP ${res.status}`);
+  }
 
   if (!res.ok) return { ok: false };
+
   const body = (await res.json()) as { ok?: boolean; legacy_user_id?: number };
   return body.ok ? { ok: true, legacyUserId: body.legacy_user_id } : { ok: false };
 }
