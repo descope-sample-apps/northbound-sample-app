@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Fraunces, Figtree } from 'next/font/google';
 import './globals.css';
+import { Nav } from '@/components/brand/Nav';
+import { Footer } from '@/components/brand/Footer';
 
 // No system font stack: Fraunces carries every heading, Figtree every control.
 //
@@ -29,7 +31,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${figtree.variable}`}>
-      <body className="min-h-screen">{children}</body>
+      <body className="flex min-h-screen flex-col">
+        <Nav />
+        <div className="flex-1">{children}</div>
+        <Footer />
+      </body>
     </html>
   );
 }
