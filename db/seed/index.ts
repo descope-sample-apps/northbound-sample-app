@@ -5,6 +5,7 @@ import { seedCatalog } from './catalog';
 import { seedCustomers } from './customers';
 import { seedAccount } from './account';
 import { seedOrders } from './orders';
+import { seedAgents } from './agents';
 
 /**
  * Rebuilds the demo database from scratch, deterministically.
@@ -15,6 +16,10 @@ import { seedOrders } from './orders';
  */
 export async function seedAll(db: LibSQLDatabase<typeof schema>): Promise<void> {
   // Delete in foreign-key-safe order: children before parents.
+  await db.delete(schema.tokens);
+  await db.delete(schema.authorizationCodes);
+  await db.delete(schema.authorizationRequests);
+  await db.delete(schema.oauthClients);
   await db.delete(schema.orderItems);
   await db.delete(schema.orders);
   await db.delete(schema.cartItems);
@@ -25,10 +30,12 @@ export async function seedAll(db: LibSQLDatabase<typeof schema>): Promise<void> 
   await db.delete(schema.customers);
   await db.delete(schema.products);
   await db.delete(schema.categories);
+  await db.delete(schema.agents);
   await db.delete(legacyCredentials);
 
   await seedCatalog(db);
   await seedCustomers(db);
+  await seedAgents(db);
   await seedAccount(db);
   await seedOrders(db);
 }

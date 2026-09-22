@@ -7,3 +7,4 @@ export * from './customers';
 export * from './catalog';
 export * from './commerce';
 export * from './account';
+export * from './oauth';
