@@ -16,16 +16,38 @@ function keyFilePath(): string {
 }
 
 /**
- * Keys are GENERATED, never committed.
+ * Keys are SUPPLIED or GENERATED, never committed.
+ *
+ * Resolution order:
+ *
+ *   1. NORTHBOUND_SIGNING_KEY — a JSON `StoredKeys` blob. This is the only
+ *      option that works on a host with an ephemeral filesystem: on Vercel a
+ *      generated file does not survive, so two instances would sign with
+ *      different keys and reject each other's tokens.
+ *   2. data/keys.json — generated on first run, for local development.
  *
  * The parent specification forbids secrets in the repository, and a checked-in
  * development key is a secret in the repository — one that would still be there
  * after somebody deployed this. Generating on first run costs a few hundred
  * milliseconds once and removes the temptation entirely.
  *
- * data/ is gitignored alongside the SQLite file.
+ * Turbopack warns that reading a path from a variable makes it trace the whole
+ * project. That is accepted: the alternative is a hardcoded path, which would
+ * take the test seam away and gain nothing at runtime.
  */
 async function loadOrCreate(): Promise<StoredKeys> {
+  const supplied = process.env.NORTHBOUND_SIGNING_KEY;
+  if (supplied) {
+    const parsed = JSON.parse(supplied) as StoredKeys;
+    if (!parsed.privateJwk || !parsed.publicJwk || !parsed.kid) {
+      throw new Error(
+        'NORTHBOUND_SIGNING_KEY must be a JSON object with privateJwk, publicJwk and kid. '
+        + 'Generate one with: pnpm oauth:keygen',
+      );
+    }
+    return parsed;
+  }
+
   const path = keyFilePath();
 
   if (existsSync(path)) {

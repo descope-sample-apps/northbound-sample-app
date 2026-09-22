@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Northbound — an outdoor gear retailer. Sub-project A of a B2C agent-authorization reference implementation.",
+  "description": "Northbound \u2014 an outdoor gear retailer. Sub-project A of a B2C agent-authorization reference implementation.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,7 +15,8 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:seed": "tsx db/seed/index.ts",
     "db:setup": "pnpm db:migrate && pnpm db:seed",
-    "images:fetch": "tsx scripts/fetch-images.ts"
+    "images:fetch": "tsx scripts/fetch-images.ts",
+    "oauth:keygen": "tsx scripts/keygen.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
