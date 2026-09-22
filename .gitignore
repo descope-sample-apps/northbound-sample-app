@@ -3,7 +3,9 @@ node_modules/
 .next/
 .env
 .env.local
-data/*.db
+# The SQLite file and the generated RS256 signing key. Neither is ever
+# committed: one is rebuildable with `pnpm db:setup`, the other is a secret.
+data/
 /out/
 *.tsbuildinfo
 /coverage

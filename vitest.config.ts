@@ -10,9 +10,5 @@ export default defineConfig({
     include: ['test/**/*.test.{ts,tsx}'],
     pool: 'forks',
   },
-  // tsconfig sets jsx: "preserve" for Next's compiler, which leaves esbuild
-  // without a transform for .tsx test files. Component tests render to static
-  // markup, so the automatic runtime is all they need — no jsdom, no DOM.
-  esbuild: { jsx: 'automatic' },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, '.') } },
 });

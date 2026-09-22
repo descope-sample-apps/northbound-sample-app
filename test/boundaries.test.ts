@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
@@ -22,10 +22,33 @@ function stripComments(source: string): string {
 
 // `lib` is included deliberately. An earlier version of this file scanned only
 // ['app', 'lib/services', 'components'], which meant the enforcement test could
-// not see lib/auth/ — the very directory where the credential code lives, and
-// where sub-project B will add OAuth code. A guard with a blind spot over the
-// thing it guards is worse than no guard, because it reports green.
+// not see lib/auth/ — the very directory where the credential code lives. A
+// guard with a blind spot over the thing it guards is worse than no guard,
+// because it reports green.
 const STOREFRONT_DIRS = ['app', 'lib', 'components'];
+
+/**
+ * Sub-project B adds an authorization server, so OAuth vocabulary now exists in
+ * the repository — on purpose, in four places and nowhere else.
+ *
+ * This allowlist is written out rather than the test being deleted or softened,
+ * because what the test proves is the parent project's whole thesis: the
+ * STOREFRONT stayed clean, and agent support arrived as an addition rather than
+ * a rewrite. Losing that evidence would cost more than the test is worth
+ * keeping.
+ *
+ * Adding an entry here is a deliberate act. If a storefront page ever needs to
+ * be listed, that is the finding, not the fix.
+ */
+const OAUTH_DIRS = [
+  join('lib', 'oauth'),        // the authorization server itself
+  join('app', 'oauth'),        // its endpoints and consent screen
+  join('app', 'api'),          // the bearer-only resource server
+  join('app', '.well-known'),  // discovery documents
+];
+
+const isOauthSurface = (file: string) =>
+  OAUTH_DIRS.some((dir) => file.startsWith(dir + sep));
 
 /** The one module the spec permits to reach the legacy credential store. */
 const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
@@ -41,6 +64,7 @@ describe('sub-project A contains no agent concepts', () => {
 
     for (const file of STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))) {
       if (file === LEGACY_ROUTE) continue;
+      if (isOauthSurface(file)) continue;
 
       const code = stripComments(readFileSync(file, 'utf8'));
       const matches = code.match(
@@ -52,10 +76,22 @@ describe('sub-project A contains no agent concepts', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('exposes exactly one HTTP route, and it is not under /api', () => {
-    const routes = sourceFiles('app').filter((f) => /route\.tsx?$/.test(f));
-    expect(routes).toEqual([join('app', 'legacy-auth', 'verify', 'route.ts')]);
-    expect(existsSync(join('app', 'api'))).toBe(false);
+  // The allowlist above is only trustworthy if it stays narrow. A storefront
+  // page appearing in it would mean OAuth had leaked into the shop.
+  it('keeps every storefront page out of the OAuth allowlist', () => {
+    const storefrontPages = sourceFiles('app')
+      .filter((file) => /page\.tsx$/.test(file))
+      .filter((file) => isOauthSurface(file));
+
+    expect(storefrontPages.filter((f) => !f.startsWith(join('app', 'oauth')))).toEqual([]);
+  });
+
+  it('exposes exactly one non-OAuth HTTP route, and it is not under /api', () => {
+    const routes = sourceFiles('app')
+      .filter((f) => /route\.tsx?$/.test(f))
+      .filter((f) => !isOauthSurface(f));
+
+    expect(routes).toEqual([LEGACY_ROUTE]);
   });
 });
 
