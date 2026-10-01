@@ -1,0 +1,16 @@
+{
+  "_comment": [
+    "Key-directory hosts whose signatures earn the 'verified-trusted' tier and",
+    "the higher spending cap. A host here is a statement that Northbound has a",
+    "relationship with that agent platform — not that its signatures are more",
+    "valid. Signatures from hosts NOT listed here still verify; they simply get",
+    "the lower cap.",
+    "",
+    "The localhost entry exists so the demo can show all three tiers on one",
+    "machine. Remove it before this is anything other than a demo."
+  ],
+  "trustedHosts": [
+    "agents.trusted-platform.example",
+    "localhost:4455"
+  ]
+}

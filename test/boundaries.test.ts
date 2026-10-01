@@ -42,8 +42,10 @@ const STOREFRONT_DIRS = ['app', 'lib', 'components'];
  */
 const OAUTH_DIRS = [
   join('lib', 'oauth'),        // the authorization server itself
+  join('lib', 'webbotauth'),   // RFC 9421 agent verification and the tier policy
   join('app', 'oauth'),        // its endpoints and consent screen
   join('app', 'api'),          // the bearer-only resource server
+  join('app', 'agents'),       // the agent sign-in page
   join('app', '.well-known'),  // discovery documents
 ];
 

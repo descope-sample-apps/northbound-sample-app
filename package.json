@@ -16,7 +16,8 @@
     "db:seed": "tsx db/seed/index.ts",
     "db:setup": "pnpm db:migrate && pnpm db:seed",
     "images:fetch": "tsx scripts/fetch-images.ts",
-    "oauth:keygen": "tsx scripts/keygen.ts"
+    "oauth:keygen": "tsx scripts/keygen.ts",
+    "agent:sign": "tsx scripts/sign-request.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
