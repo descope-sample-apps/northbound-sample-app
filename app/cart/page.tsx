@@ -3,10 +3,11 @@ import { CartLines } from '@/components/brand/CartLines';
 import { OrderSummary } from '@/components/brand/OrderSummary';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { getCart } from '@/lib/services/cart';
+import { browserContext } from '@/lib/oauth/types';
 
 export default async function CartPage() {
   const customer = await requireCustomer();
-  const cart = await getCart(customer.id);
+  const cart = await getCart(browserContext(customer.id));
 
   if (cart.items.length === 0) {
     return (

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '@/db/schema';
 import { withTestDb, seedMinimal, type TestDb } from './harness';
+import { browserContext } from '@/lib/oauth/types';
 
 let tdb: TestDb;
 let ids: Awaited<ReturnType<typeof seedMinimal>>;
@@ -36,9 +37,9 @@ describe('placeOrder', () => {
   it('places an order, snapshots names and prices, and clears the cart', async () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 2);
+    await addToCart(browserContext(ids.alice), pack(), 2);
 
-    const order = await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    const order = await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
 
     expect(order.subtotalCents).toBe(84_000);
     expect(order.shippingCents).toBe(0);
@@ -52,32 +53,32 @@ describe('placeOrder', () => {
     expect(items[0].unitPriceCents).toBe(42_000);
     expect(items[0].lineTotalCents).toBe(84_000);
 
-    expect((await getCart(ids.alice)).items).toEqual([]);
+    expect((await getCart(browserContext(ids.alice))).items).toEqual([]);
   });
 
   it('numbers the first order 10241', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 1);
-    expect((await placeOrder(ids.alice, await defaultsFor(ids.alice))).orderNumber)
+    await addToCart(browserContext(ids.alice), mug(), 1);
+    expect((await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice))).orderNumber)
       .toBe(10_241);
   });
 
   it('increments the order number for the next order', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 1);
-    await placeOrder(ids.alice, await defaultsFor(ids.alice));
-    await addToCart(ids.carol, mug(), 1);
-    expect((await placeOrder(ids.carol, await defaultsFor(ids.carol))).orderNumber)
+    await addToCart(browserContext(ids.alice), mug(), 1);
+    await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.carol), mug(), 1);
+    expect((await placeOrder(browserContext(ids.carol), await defaultsFor(ids.carol))).orderNumber)
       .toBe(10_242);
   });
 
   it('decrements stock by the ordered quantity', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 3);
-    await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.alice), pack(), 3);
+    await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
     const [product] = await tdb.db.select().from(schema.products)
       .where(eq(schema.products.id, pack()));
     expect(product.stockQty).toBe(7);
@@ -86,7 +87,7 @@ describe('placeOrder', () => {
   it('refuses to place an empty order', async () => {
     const { placeOrder } = await import('@/lib/services/orders');
     const { ValidationError } = await import('@/lib/services/errors');
-    await expect(placeOrder(ids.alice, await defaultsFor(ids.alice)))
+    await expect(placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice)))
       .rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -94,10 +95,10 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { OwnershipError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart(browserContext(ids.alice), mug(), 1);
     const carol = await defaultsFor(ids.carol);
     const alice = await defaultsFor(ids.alice);
-    await expect(placeOrder(ids.alice, {
+    await expect(placeOrder(browserContext(ids.alice), {
       addressId: carol.addressId, paymentMethodId: alice.paymentMethodId,
     })).rejects.toBeInstanceOf(OwnershipError);
   });
@@ -106,10 +107,10 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { OwnershipError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart(browserContext(ids.alice), mug(), 1);
     const carol = await defaultsFor(ids.carol);
     const alice = await defaultsFor(ids.alice);
-    await expect(placeOrder(ids.alice, {
+    await expect(placeOrder(browserContext(ids.alice), {
       addressId: alice.addressId, paymentMethodId: carol.paymentMethodId,
     })).rejects.toBeInstanceOf(OwnershipError);
   });
@@ -119,11 +120,11 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { ValidationError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, pack(), 1);
+    await addToCart(browserContext(ids.alice), pack(), 1);
     await tdb.db.update(schema.products).set({ isActive: false })
       .where(eq(schema.products.id, pack()));
 
-    const error = await placeOrder(ids.alice, await defaultsFor(ids.alice)).catch((e) => e);
+    const error = await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice)).catch((e) => e);
     expect(error).toBeInstanceOf(ValidationError);
     expect(error.message).toContain('Cascade 45L Expedition Pack');
   });
@@ -133,11 +134,11 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { OutOfStockError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, pack(), 5);
+    await addToCart(browserContext(ids.alice), pack(), 5);
     await tdb.db.update(schema.products).set({ stockQty: 2 })
       .where(eq(schema.products.id, pack()));
 
-    const error = await placeOrder(ids.alice, await defaultsFor(ids.alice)).catch((e) => e);
+    const error = await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice)).catch((e) => e);
     expect(error).toBeInstanceOf(OutOfStockError);
     expect(error.productName).toBe('Cascade 45L Expedition Pack');
   });
@@ -147,13 +148,13 @@ describe('placeOrder', () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { PriceChangedError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, pack(), 1);
-    const shown = (await getCart(ids.alice)).totalCents;
+    await addToCart(browserContext(ids.alice), pack(), 1);
+    const shown = (await getCart(browserContext(ids.alice))).totalCents;
 
     await tdb.db.update(schema.products).set({ priceCents: 50_000 })
       .where(eq(schema.products.id, pack()));
 
-    await expect(placeOrder(ids.alice, {
+    await expect(placeOrder(browserContext(ids.alice), {
       ...(await defaultsFor(ids.alice)), expectedTotalCents: shown,
     })).rejects.toBeInstanceOf(PriceChangedError);
   });
@@ -161,9 +162,9 @@ describe('placeOrder', () => {
   it('accepts a matching expected total', async () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 1);
-    const shown = (await getCart(ids.alice)).totalCents;
-    const order = await placeOrder(ids.alice, {
+    await addToCart(browserContext(ids.alice), pack(), 1);
+    const shown = (await getCart(browserContext(ids.alice))).totalCents;
+    const order = await placeOrder(browserContext(ids.alice), {
       ...(await defaultsFor(ids.alice)), expectedTotalCents: shown,
     });
     expect(order.totalCents).toBe(shown);
@@ -172,30 +173,30 @@ describe('placeOrder', () => {
   it('leaves the cart intact when checkout fails', async () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 1);
+    await addToCart(browserContext(ids.alice), pack(), 1);
     await tdb.db.update(schema.products).set({ stockQty: 0 })
       .where(eq(schema.products.id, pack()));
 
-    await placeOrder(ids.alice, await defaultsFor(ids.alice)).catch(() => {});
+    await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice)).catch(() => {});
 
     expect(await tdb.db.select().from(schema.orders)).toHaveLength(0);
     expect(await tdb.db.select().from(schema.orderItems)).toHaveLength(0);
-    expect((await getCart(ids.alice)).items).toHaveLength(1);
+    expect((await getCart(browserContext(ids.alice))).items).toHaveLength(1);
   });
 
   // REVIEW FOCUS 1: concurrent checkout must not oversell or duplicate a number.
   it('does not oversell the last unit under concurrent checkout', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, shell(), 1);
-    await addToCart(ids.carol, shell(), 1);
+    await addToCart(browserContext(ids.alice), shell(), 1);
+    await addToCart(browserContext(ids.carol), shell(), 1);
 
     const aliceDefaults = await defaultsFor(ids.alice);
     const carolDefaults = await defaultsFor(ids.carol);
 
     const results = await Promise.allSettled([
-      placeOrder(ids.alice, aliceDefaults),
-      placeOrder(ids.carol, carolDefaults),
+      placeOrder(browserContext(ids.alice), aliceDefaults),
+      placeOrder(browserContext(ids.carol), carolDefaults),
     ]);
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
@@ -208,18 +209,18 @@ describe('placeOrder', () => {
   it('never issues the same order number twice under concurrency', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 1);
-    await addToCart(ids.carol, mug(), 1);
-    await addToCart(ids.bob, mug(), 1);
+    await addToCart(browserContext(ids.alice), mug(), 1);
+    await addToCart(browserContext(ids.carol), mug(), 1);
+    await addToCart(browserContext(ids.bob), mug(), 1);
 
     const all = await Promise.all([
       defaultsFor(ids.alice), defaultsFor(ids.carol), defaultsFor(ids.bob),
     ]);
 
     await Promise.allSettled([
-      placeOrder(ids.alice, all[0]),
-      placeOrder(ids.carol, all[1]),
-      placeOrder(ids.bob, all[2]),
+      placeOrder(browserContext(ids.alice), all[0]),
+      placeOrder(browserContext(ids.carol), all[1]),
+      placeOrder(browserContext(ids.bob), all[2]),
     ]);
 
     const numbers = (await tdb.db.select().from(schema.orders)).map((o) => o.orderNumber);
@@ -231,12 +232,12 @@ describe('listOrders and getOrder', () => {
   it('lists only the requesting customer\'s orders with an item count', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, listOrders } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 2);
-    await placeOrder(ids.alice, await defaultsFor(ids.alice));
-    await addToCart(ids.carol, mug(), 1);
-    await placeOrder(ids.carol, await defaultsFor(ids.carol));
+    await addToCart(browserContext(ids.alice), mug(), 2);
+    await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.carol), mug(), 1);
+    await placeOrder(browserContext(ids.carol), await defaultsFor(ids.carol));
 
-    const alice = await listOrders(ids.alice);
+    const alice = await listOrders(browserContext(ids.alice));
     expect(alice).toHaveLength(1);
     expect(alice[0].itemCount).toBe(2);
   });
@@ -244,10 +245,10 @@ describe('listOrders and getOrder', () => {
   it('returns full order detail for the owner', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 2);
-    const placed = await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.alice), mug(), 2);
+    const placed = await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
 
-    const detail = await getOrder(ids.alice, placed.orderNumber);
+    const detail = await getOrder(browserContext(ids.alice), placed.orderNumber);
     expect(detail.items).toHaveLength(1);
     expect(detail.address.customerId).toBe(ids.alice);
     expect(detail.paymentMethod.last4).toBe('4242');
@@ -258,21 +259,21 @@ describe('listOrders and getOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
     const { NotFoundError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, mug(), 1);
-    const placed = await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.alice), mug(), 1);
+    const placed = await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
 
-    await expect(getOrder(ids.carol, placed.orderNumber))
+    await expect(getOrder(browserContext(ids.carol), placed.orderNumber))
       .rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('treats a non-numeric order number as not found rather than throwing', async () => {
     const { getOrder } = await import('@/lib/services/orders');
     const { NotFoundError } = await import('@/lib/services/errors');
-    await expect(getOrder(ids.alice, Number('abc'))).rejects.toBeInstanceOf(NotFoundError);
+    await expect(getOrder(browserContext(ids.alice), Number('abc'))).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('returns an empty list for a customer with no orders', async () => {
     const { listOrders } = await import('@/lib/services/orders');
-    expect(await listOrders(ids.bob)).toEqual([]);
+    expect(await listOrders(browserContext(ids.bob))).toEqual([]);
   });
 });

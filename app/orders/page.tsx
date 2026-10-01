@@ -3,6 +3,7 @@ import { ButtonLink } from '@/components/brand/Button';
 import { Price } from '@/components/brand/Price';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { listOrders } from '@/lib/services/orders';
+import { browserContext } from '@/lib/oauth/types';
 
 const STATUS_STYLE: Record<string, string> = {
   placed: 'bg-spruce/10 text-spruce',
@@ -17,7 +18,7 @@ const dateFormat = new Intl.DateTimeFormat('en-US', {
 
 export default async function OrdersPage() {
   const customer = await requireCustomer();
-  const orders = await listOrders(customer.id);
+  const orders = await listOrders(browserContext(customer.id));
 
   if (orders.length === 0) {
     return (

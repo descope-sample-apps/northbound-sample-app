@@ -1,3 +1,4 @@
+import type { ActorContext } from '@/lib/oauth/types';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
@@ -26,7 +27,8 @@ const PaymentMethodSchema = z.object({
 
 export type PaymentMethodInput = z.input<typeof PaymentMethodSchema>;
 
-export async function listPaymentMethods(customerId: number): Promise<PaymentMethod[]> {
+export async function listPaymentMethods(ctx: ActorContext): Promise<PaymentMethod[]> {
+  const { customerId } = ctx;
   return db
     .select()
     .from(paymentMethods)
@@ -45,9 +47,10 @@ async function clearDefaults(customerId: number): Promise<void> {
  * the digits of a stored card is not a thing a real payment vault permits.
  */
 export async function addPaymentMethod(
-  customerId: number,
+  ctx: ActorContext,
   raw: PaymentMethodInput,
 ): Promise<PaymentMethod> {
+  const { customerId } = ctx;
   const parsed = PaymentMethodSchema.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
 
@@ -60,7 +63,8 @@ export async function addPaymentMethod(
   return created;
 }
 
-export async function deletePaymentMethod(customerId: number, id: number): Promise<void> {
+export async function deletePaymentMethod(ctx: ActorContext, id: number): Promise<void> {
+  const { customerId } = ctx;
   const [exists] = await db.select().from(paymentMethods)
     .where(and(eq(paymentMethods.id, id), eq(paymentMethods.customerId, customerId)))
     .limit(1);
@@ -85,9 +89,10 @@ export async function deletePaymentMethod(customerId: number, id: number): Promi
 }
 
 export async function setDefaultPaymentMethod(
-  customerId: number,
+  ctx: ActorContext,
   id: number,
 ): Promise<void> {
+  const { customerId } = ctx;
   const [exists] = await db.select().from(paymentMethods)
     .where(and(eq(paymentMethods.id, id), eq(paymentMethods.customerId, customerId)))
     .limit(1);

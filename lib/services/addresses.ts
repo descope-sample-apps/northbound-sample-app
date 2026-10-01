@@ -1,3 +1,4 @@
+import type { ActorContext } from '@/lib/oauth/types';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
@@ -20,7 +21,8 @@ const AddressSchema = z.object({
 
 export type AddressInput = z.input<typeof AddressSchema>;
 
-export async function listAddresses(customerId: number): Promise<Address[]> {
+export async function listAddresses(ctx: ActorContext): Promise<Address[]> {
+  const { customerId } = ctx;
   return db
     .select()
     .from(addresses)
@@ -35,9 +37,10 @@ async function clearDefaults(customerId: number): Promise<void> {
 }
 
 export async function upsertAddress(
-  customerId: number,
+  ctx: ActorContext,
   raw: AddressInput,
 ): Promise<Address> {
+  const { customerId } = ctx;
   const parsed = AddressSchema.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
 
@@ -77,7 +80,8 @@ export async function upsertAddress(
   return created;
 }
 
-export async function deleteAddress(customerId: number, id: number): Promise<void> {
+export async function deleteAddress(ctx: ActorContext, id: number): Promise<void> {
+  const { customerId } = ctx;
   const [exists] = await db.select().from(addresses)
     .where(and(eq(addresses.id, id), eq(addresses.customerId, customerId)))
     .limit(1);
@@ -103,7 +107,8 @@ export async function deleteAddress(customerId: number, id: number): Promise<voi
     .where(and(eq(addresses.id, id), eq(addresses.customerId, customerId)));
 }
 
-export async function setDefaultAddress(customerId: number, id: number): Promise<void> {
+export async function setDefaultAddress(ctx: ActorContext, id: number): Promise<void> {
+  const { customerId } = ctx;
   const [exists] = await db.select().from(addresses)
     .where(and(eq(addresses.id, id), eq(addresses.customerId, customerId)))
     .limit(1);

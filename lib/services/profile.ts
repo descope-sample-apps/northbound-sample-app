@@ -1,3 +1,4 @@
+import type { ActorContext } from '@/lib/oauth/types';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
@@ -12,7 +13,8 @@ export type Profile = {
   createdAt: Date;
 };
 
-export async function getProfile(customerId: number): Promise<Profile> {
+export async function getProfile(ctx: ActorContext): Promise<Profile> {
+  const { customerId } = ctx;
   const [customer] = await db
     .select()
     .from(customers)
@@ -51,9 +53,10 @@ const UpdateProfileSchema = z.object({
  * than depend on it.
  */
 export async function updateProfile(
-  customerId: number,
+  ctx: ActorContext,
   input: z.input<typeof UpdateProfileSchema>,
 ): Promise<void> {
+  const { customerId } = ctx;
   const parsed = UpdateProfileSchema.safeParse(input);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
 

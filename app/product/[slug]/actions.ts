@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { addToCart } from '@/lib/services/cart';
 import { ServiceError } from '@/lib/services/errors';
+import { browserContext } from '@/lib/oauth/types';
 
 export type ActionState = { error?: string; added?: boolean };
 
@@ -25,7 +26,7 @@ export async function addToCartAction(
   const slug = String(formData.get('slug') ?? '');
 
   try {
-    await addToCart(customer.id, productId, quantity);
+    await addToCart(browserContext(customer.id), productId, quantity);
   } catch (error) {
     if (error instanceof ServiceError) return { error: error.message };
     throw error;

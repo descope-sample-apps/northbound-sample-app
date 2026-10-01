@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '@/db/schema';
 import { withTestDb, seedMinimal, type TestDb } from './harness';
+import { browserContext } from '@/lib/oauth/types';
 
 let tdb: TestDb;
 let ids: Awaited<ReturnType<typeof seedMinimal>>;
@@ -35,21 +36,21 @@ describe('browse to order', () => {
     const { placeOrder, getOrder, listOrders } = await import('@/lib/services/orders');
 
     const product = await getProductBySlug('cascade-45l');
-    await addToCart(ids.alice, product.id, 2);
+    await addToCart(browserContext(ids.alice), product.id, 2);
 
-    const cart = await getCart(ids.alice);
+    const cart = await getCart(browserContext(ids.alice));
     expect(cart.totalCents).toBe(91_140);
 
-    const order = await placeOrder(ids.alice, {
+    const order = await placeOrder(browserContext(ids.alice), {
       ...(await defaultsFor(ids.alice)),
       expectedTotalCents: cart.totalCents,
     });
 
     expect(order.totalCents).toBe(cart.totalCents);
-    expect((await getCart(ids.alice)).items).toEqual([]);
-    expect(await listOrders(ids.alice)).toHaveLength(1);
+    expect((await getCart(browserContext(ids.alice))).items).toEqual([]);
+    expect(await listOrders(browserContext(ids.alice))).toHaveLength(1);
 
-    const detail = await getOrder(ids.alice, order.orderNumber);
+    const detail = await getOrder(browserContext(ids.alice), order.orderNumber);
     expect(detail.items[0].nameSnapshot).toBe('Cascade 45L Expedition Pack');
     expect(detail.address.customerId).toBe(ids.alice);
 
@@ -63,10 +64,10 @@ describe('browse to order', () => {
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
     const { NotFoundError } = await import('@/lib/services/errors');
 
-    await addToCart(ids.alice, ids.productIds[2], 1);
-    const order = await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.alice), ids.productIds[2], 1);
+    const order = await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
 
-    await expect(getOrder(ids.carol, order.orderNumber))
+    await expect(getOrder(browserContext(ids.carol), order.orderNumber))
       .rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -74,11 +75,11 @@ describe('browse to order', () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, ids.productIds[2], 1); // $18.00 mug
-    const cart = await getCart(ids.alice);
+    await addToCart(browserContext(ids.alice), ids.productIds[2], 1); // $18.00 mug
+    const cart = await getCart(browserContext(ids.alice));
     expect(cart.shippingCents).toBe(895);
 
-    const order = await placeOrder(ids.alice, {
+    const order = await placeOrder(browserContext(ids.alice), {
       ...(await defaultsFor(ids.alice)),
       expectedTotalCents: cart.totalCents,
     });
@@ -90,13 +91,13 @@ describe('browse to order', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, ids.productIds[0], 1);
-    const order = await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.alice), ids.productIds[0], 1);
+    const order = await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
 
     await tdb.db.update(schema.products).set({ priceCents: 1 })
       .where(eq(schema.products.id, ids.productIds[0]));
 
-    const detail = await getOrder(ids.alice, order.orderNumber);
+    const detail = await getOrder(browserContext(ids.alice), order.orderNumber);
     expect(detail.items[0].unitPriceCents).toBe(42_000);
     expect(detail.totalCents).toBe(order.totalCents);
   });

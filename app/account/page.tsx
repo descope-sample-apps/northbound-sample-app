@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ProfileForm } from '@/components/brand/AccountForms';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { getProfile } from '@/lib/services/profile';
+import { browserContext } from '@/lib/oauth/types';
 
 const dateFormat = new Intl.DateTimeFormat('en-US', {
   year: 'numeric', month: 'long',
@@ -15,7 +16,7 @@ const SECTIONS = [
 
 export default async function AccountPage() {
   const customer = await requireCustomer();
-  const profile = await getProfile(customer.id);
+  const profile = await getProfile(browserContext(customer.id));
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">

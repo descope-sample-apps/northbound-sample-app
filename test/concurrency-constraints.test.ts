@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '@/db/schema';
 import { withTestDb, seedMinimal, type TestDb } from './harness';
+import { browserContext } from '@/lib/oauth/types';
 
 let tdb: TestDb;
 let ids: Awaited<ReturnType<typeof seedMinimal>>;
@@ -39,18 +40,18 @@ describe('concurrent checkout with no contended row', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, mug(), 1);
-    await addToCart(ids.carol, mug(), 1);
-    await addToCart(ids.bob, mug(), 1);
+    await addToCart(browserContext(ids.alice), mug(), 1);
+    await addToCart(browserContext(ids.carol), mug(), 1);
+    await addToCart(browserContext(ids.bob), mug(), 1);
 
     const [a, c, b] = await Promise.all([
       defaultsFor(ids.alice), defaultsFor(ids.carol), defaultsFor(ids.bob),
     ]);
 
     const results = await Promise.allSettled([
-      placeOrder(ids.alice, a),
-      placeOrder(ids.carol, c),
-      placeOrder(ids.bob, b),
+      placeOrder(browserContext(ids.alice), a),
+      placeOrder(browserContext(ids.carol), c),
+      placeOrder(browserContext(ids.bob), b),
     ]);
 
     const rejected = results.filter((r) => r.status === 'rejected');
@@ -71,16 +72,16 @@ describe('concurrent checkout with no contended row', () => {
     const { ServiceError } = await import('@/lib/services/errors');
 
     for (const customerId of [ids.alice, ids.carol, ids.bob]) {
-      await addToCart(customerId, pack(), 1);
+      await addToCart(browserContext(customerId), pack(), 1);
     }
     const defaults = await Promise.all(
       [ids.alice, ids.carol, ids.bob].map((id) => defaultsFor(id)),
     );
 
     const results = await Promise.allSettled([
-      placeOrder(ids.alice, defaults[0]),
-      placeOrder(ids.carol, defaults[1]),
-      placeOrder(ids.bob, defaults[2]),
+      placeOrder(browserContext(ids.alice), defaults[0]),
+      placeOrder(browserContext(ids.carol), defaults[1]),
+      placeOrder(browserContext(ids.bob), defaults[2]),
     ]);
 
     for (const result of results) {
@@ -99,15 +100,15 @@ describe('deleting account details a past order depends on', () => {
     const { ServiceError } = await import('@/lib/services/errors');
 
     const defaults = await defaultsFor(ids.alice);
-    await addToCart(ids.alice, mug(), 1);
-    await placeOrder(ids.alice, defaults);
+    await addToCart(browserContext(ids.alice), mug(), 1);
+    await placeOrder(browserContext(ids.alice), defaults);
 
-    const error = await deleteAddress(ids.alice, defaults.addressId).catch((e) => e);
+    const error = await deleteAddress(browserContext(ids.alice), defaults.addressId).catch((e) => e);
     expect(error).toBeInstanceOf(ServiceError);
     expect(error.message).toMatch(/past orders|previous orders|used by/i);
 
     // And it is still there — a failed delete must not half-happen.
-    expect(await listAddresses(ids.alice)).toHaveLength(1);
+    expect(await listAddresses(browserContext(ids.alice))).toHaveLength(1);
   });
 
   it('refuses to delete a payment method used by an order', async () => {
@@ -118,25 +119,25 @@ describe('deleting account details a past order depends on', () => {
     const { ServiceError } = await import('@/lib/services/errors');
 
     const defaults = await defaultsFor(ids.alice);
-    await addToCart(ids.alice, mug(), 1);
-    await placeOrder(ids.alice, defaults);
+    await addToCart(browserContext(ids.alice), mug(), 1);
+    await placeOrder(browserContext(ids.alice), defaults);
 
-    const error = await deletePaymentMethod(ids.alice, defaults.paymentMethodId)
+    const error = await deletePaymentMethod(browserContext(ids.alice), defaults.paymentMethodId)
       .catch((e) => e);
     expect(error).toBeInstanceOf(ServiceError);
     expect(error.message).toMatch(/past orders|previous orders|used by/i);
-    expect(await listPaymentMethods(ids.alice)).toHaveLength(1);
+    expect(await listPaymentMethods(browserContext(ids.alice))).toHaveLength(1);
   });
 
   it('still deletes an address no order references', async () => {
     const { upsertAddress, deleteAddress, listAddresses } =
       await import('@/lib/services/addresses');
-    const created = await upsertAddress(ids.alice, {
+    const created = await upsertAddress(browserContext(ids.alice), {
       label: 'Work', recipient: 'Alice Chen', line1: '2 Office Way',
       city: 'Portland', region: 'OR', postalCode: '97202',
     });
-    await deleteAddress(ids.alice, created.id);
-    expect((await listAddresses(ids.alice)).map((a) => a.id)).not.toContain(created.id);
+    await deleteAddress(browserContext(ids.alice), created.id);
+    expect((await listAddresses(browserContext(ids.alice))).map((a) => a.id)).not.toContain(created.id);
   });
 });
 
@@ -151,7 +152,7 @@ describe('cart creation is safe under concurrent first access', () => {
     expect(await tdb.db.select().from(schema.carts)).toHaveLength(0);
 
     const results = await Promise.allSettled([
-      getCart(ids.alice), getCart(ids.alice), getCart(ids.alice),
+      getCart(browserContext(ids.alice)), getCart(browserContext(ids.alice)), getCart(browserContext(ids.alice)),
     ]);
 
     expect(results.filter((r) => r.status === 'rejected')).toEqual([]);
@@ -166,8 +167,8 @@ describe('stock decrement is atomic', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, pack(), 10); // exactly all of it
-    await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.alice), pack(), 10); // exactly all of it
+    await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
 
     const [product] = await tdb.db.select().from(schema.products)
       .where(eq(schema.products.id, pack()));
@@ -179,8 +180,8 @@ describe('stock decrement is atomic', () => {
     const { placeOrder } = await import('@/lib/services/orders');
     const { readFileSync } = await import('node:fs');
 
-    await addToCart(ids.alice, pack(), 2);
-    await placeOrder(ids.alice, await defaultsFor(ids.alice));
+    await addToCart(browserContext(ids.alice), pack(), 2);
+    await placeOrder(browserContext(ids.alice), await defaultsFor(ids.alice));
 
     const [product] = await tdb.db.select().from(schema.products)
       .where(eq(schema.products.id, pack()));

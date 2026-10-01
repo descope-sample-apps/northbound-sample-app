@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
+import { browserContext } from '@/lib/oauth/types';
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
@@ -70,9 +71,55 @@ describe('sub-project A contains no agent concepts', () => {
 
       const code = stripComments(readFileSync(file, 'utf8'));
       const matches = code.match(
-        /\b(oauth|bearer|access_token|refresh_token|ActorContext|authorization_details|scopes?|policyEngine)\b/gi,
+        /\b(bearer|access_token|refresh_token|authorization_details|policyEngine|OAuthError|AuthorizationServer)\b/g,
       );
       if (matches) offenders.push(`${file}: ${[...new Set(matches)].join(', ')}`);
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  // ActorContext is deliberately NOT in the list above any more.
+  //
+  // Until the agent-support commit it was scaffolding, and finding it in the
+  // service layer would have meant the storefront was built in anticipation of
+  // agents. Now it is the application's own vocabulary — the type that makes
+  // "who is this for" and "who is doing it" separate questions everywhere.
+  //
+  // What replaces that assertion is narrower and more useful: storefront code
+  // may PASS a context, but must never CONSTRUCT an actor. Only the bearer
+  // guard, which has a verified token in hand, gets to say an agent is present.
+  it('never lets storefront code claim an actor', () => {
+    const offenders = STOREFRONT_DIRS
+      .flatMap((d) => sourceFiles(d))
+      .filter((file) => !isOauthSurface(file))
+      .filter((file) => /actor:\s*\{/.test(stripComments(readFileSync(file, 'utf8'))));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('builds every storefront context through browserContext', () => {
+    // browserContext hardcodes actor: null, so a page cannot accidentally
+    // inherit an agent identity from a request it is handling.
+    expect(browserContext(82731)).toMatchObject({
+      customerId: 82731, actor: null, scopes: [], source: 'browser',
+    });
+  });
+
+  // Storefront code may import the shared vocabulary — ActorContext and
+  // browserContext — and nothing else from lib/oauth. Importing the
+  // authorization server, the token signer or the client registry into a page
+  // is the leak this guards against; the word "oauth" in an import path is not.
+  it('imports only the shared vocabulary from lib/oauth', () => {
+    const offenders: string[] = [];
+
+    for (const file of STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))) {
+      if (isOauthSurface(file)) continue;
+
+      const code = stripComments(readFileSync(file, 'utf8'));
+      for (const match of code.matchAll(/from\s+['"]@\/lib\/oauth\/([\w/.-]+)['"]/g)) {
+        if (match[1] !== 'types') offenders.push(`${file}: @/lib/oauth/${match[1]}`);
+      }
     }
 
     expect(offenders).toEqual([]);

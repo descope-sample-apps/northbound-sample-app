@@ -4,6 +4,7 @@ import { Price } from '@/components/brand/Price';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { getOrder } from '@/lib/services/orders';
 import { NotFoundError } from '@/lib/services/errors';
+import { browserContext } from '@/lib/oauth/types';
 
 const dateFormat = new Intl.DateTimeFormat('en-US', {
   year: 'numeric', month: 'long', day: 'numeric',
@@ -21,7 +22,7 @@ export default async function OrderDetailPage({
   try {
     // Number('abc') is NaN and Number('') is 0; the service rejects both, so a
     // junk URL renders a 404 page rather than a database error.
-    order = await getOrder(customer.id, Number(orderNumber));
+    order = await getOrder(browserContext(customer.id), Number(orderNumber));
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;

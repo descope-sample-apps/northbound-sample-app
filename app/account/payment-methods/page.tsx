@@ -4,6 +4,7 @@ import { RowActionButton } from '@/components/brand/RowActions';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { listPaymentMethods } from '@/lib/services/paymentMethods';
 import { deletePaymentMethodAction, setDefaultPaymentMethodAction } from '../actions';
+import { browserContext } from '@/lib/oauth/types';
 
 const BRAND_LABEL = {
   visa: 'Visa',
@@ -13,7 +14,7 @@ const BRAND_LABEL = {
 
 export default async function PaymentMethodsPage() {
   const customer = await requireCustomer();
-  const cards = await listPaymentMethods(customer.id);
+  const cards = await listPaymentMethods(browserContext(customer.id));
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">

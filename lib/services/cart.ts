@@ -1,3 +1,4 @@
+import type { ActorContext } from '@/lib/oauth/types';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
@@ -76,7 +77,8 @@ async function touch(cartId: number) {
   await db.update(carts).set({ updatedAt: new Date() }).where(eq(carts.id, cartId));
 }
 
-export async function getCart(customerId: number): Promise<CartView> {
+export async function getCart(ctx: ActorContext): Promise<CartView> {
+  const { customerId } = ctx;
   const cart = await getOrCreateCart(customerId);
 
   const rows = await db
@@ -105,10 +107,11 @@ export async function getCart(customerId: number): Promise<CartView> {
 }
 
 export async function addToCart(
-  customerId: number,
+  ctx: ActorContext,
   productId: number,
   quantity: number,
 ): Promise<void> {
+  const { customerId } = ctx;
   const qty = parseQuantity(quantity);
 
   const [product] = await db
@@ -148,11 +151,12 @@ export async function addToCart(
 }
 
 export async function updateCartItem(
-  customerId: number,
+  ctx: ActorContext,
   productId: number,
   quantity: number,
 ): Promise<void> {
-  if (quantity === 0) return removeFromCart(customerId, productId);
+  const { customerId } = ctx;
+  if (quantity === 0) return removeFromCart(ctx, productId);
 
   const qty = parseQuantity(quantity);
 
@@ -175,7 +179,8 @@ export async function updateCartItem(
   await touch(cart.id);
 }
 
-export async function removeFromCart(customerId: number, productId: number): Promise<void> {
+export async function removeFromCart(ctx: ActorContext, productId: number): Promise<void> {
+  const { customerId } = ctx;
   const cart = await getOrCreateCart(customerId);
 
   await db
@@ -185,7 +190,8 @@ export async function removeFromCart(customerId: number, productId: number): Pro
   await touch(cart.id);
 }
 
-export async function clearCart(customerId: number): Promise<void> {
+export async function clearCart(ctx: ActorContext): Promise<void> {
+  const { customerId } = ctx;
   const cart = await getOrCreateCart(customerId);
   await db.delete(cartItems).where(eq(cartItems.cartId, cart.id));
   await touch(cart.id);

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
+import { browserContext, type ActorContext } from '@/lib/oauth/types';
 import { ServiceError } from '@/lib/services/errors';
 import { updateProfile } from '@/lib/services/profile';
 import {
@@ -21,13 +22,13 @@ export type AccountState = { error?: string; saved?: boolean };
  * same for these forms and for every future caller of the same functions.
  */
 async function run(
-  work: (customerId: number) => Promise<unknown>,
+  work: (ctx: ActorContext) => Promise<unknown>,
   paths: string[],
 ): Promise<AccountState> {
   const customer = await requireCustomer();
 
   try {
-    await work(customer.id);
+    await work(browserContext(customer.id));
   } catch (error) {
     if (error instanceof ServiceError) return { error: error.message };
     throw error;
@@ -45,7 +46,7 @@ export async function updateProfileAction(
   formData: FormData,
 ): Promise<AccountState> {
   return run(
-    (customerId) => updateProfile(customerId, { name: asString(formData.get('name')) }),
+    (ctx) => updateProfile(ctx, { name: asString(formData.get('name')) }),
     ['/account'],
   );
 }
@@ -57,7 +58,7 @@ export async function saveAddressAction(
   const rawId = formData.get('id');
 
   return run(
-    (customerId) => upsertAddress(customerId, {
+    (ctx) => upsertAddress(ctx, {
       id: rawId ? Number(rawId) : undefined,
       label: asString(formData.get('label')),
       recipient: asString(formData.get('recipient')),
@@ -79,7 +80,7 @@ export async function deleteAddressAction(
   formData: FormData,
 ): Promise<AccountState> {
   return run(
-    (customerId) => deleteAddress(customerId, asNumber(formData.get('id'))),
+    (ctx) => deleteAddress(ctx, asNumber(formData.get('id'))),
     ['/account/addresses', '/checkout'],
   );
 }
@@ -89,7 +90,7 @@ export async function setDefaultAddressAction(
   formData: FormData,
 ): Promise<AccountState> {
   return run(
-    (customerId) => setDefaultAddress(customerId, asNumber(formData.get('id'))),
+    (ctx) => setDefaultAddress(ctx, asNumber(formData.get('id'))),
     ['/account/addresses', '/checkout'],
   );
 }
@@ -99,7 +100,7 @@ export async function addPaymentMethodAction(
   formData: FormData,
 ): Promise<AccountState> {
   return run(
-    (customerId) => addPaymentMethod(customerId, {
+    (ctx) => addPaymentMethod(ctx, {
       brand: asString(formData.get('brand')) as 'visa' | 'mastercard' | 'amex',
       last4: asString(formData.get('last4')),
       expMonth: asNumber(formData.get('expMonth')),
@@ -116,7 +117,7 @@ export async function deletePaymentMethodAction(
   formData: FormData,
 ): Promise<AccountState> {
   return run(
-    (customerId) => deletePaymentMethod(customerId, asNumber(formData.get('id'))),
+    (ctx) => deletePaymentMethod(ctx, asNumber(formData.get('id'))),
     ['/account/payment-methods', '/checkout'],
   );
 }
@@ -126,7 +127,7 @@ export async function setDefaultPaymentMethodAction(
   formData: FormData,
 ): Promise<AccountState> {
   return run(
-    (customerId) => setDefaultPaymentMethod(customerId, asNumber(formData.get('id'))),
+    (ctx) => setDefaultPaymentMethod(ctx, asNumber(formData.get('id'))),
     ['/account/payment-methods', '/checkout'],
   );
 }

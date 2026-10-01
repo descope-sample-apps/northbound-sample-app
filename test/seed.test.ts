@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import * as schema from '@/db/schema';
 import { legacyCredentials } from '@/db/schema/legacy';
 import { withTestDb, type TestDb } from './harness';
+import { browserContext } from '@/lib/oauth/types';
 
 let tdb: TestDb;
 
@@ -86,8 +87,8 @@ describe('full seed', () => {
       .where(eq(schema.paymentMethods.customerId, 82731));
     const [product] = await tdb.db.select().from(schema.products).limit(1);
 
-    await addToCart(82731, product.id, 1);
-    const order = await placeOrder(82731, {
+    await addToCart(browserContext(82731), product.id, 1);
+    const order = await placeOrder(browserContext(82731), {
       addressId: address.id, paymentMethodId: card.id,
     });
     expect(order.orderNumber).toBe(10_241);

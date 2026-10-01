@@ -4,10 +4,11 @@ import { RowActionButton } from '@/components/brand/RowActions';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { listAddresses } from '@/lib/services/addresses';
 import { deleteAddressAction, setDefaultAddressAction } from '../actions';
+import { browserContext } from '@/lib/oauth/types';
 
 export default async function AddressesPage() {
   const customer = await requireCustomer();
-  const addresses = await listAddresses(customer.id);
+  const addresses = await listAddresses(browserContext(customer.id));
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">

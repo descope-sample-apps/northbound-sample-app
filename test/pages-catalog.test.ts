@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { withTestDb, seedMinimal, type TestDb } from './harness';
+import { browserContext } from '@/lib/oauth/types';
 
 let tdb: TestDb;
 
@@ -60,11 +61,11 @@ describe('add to cart from a product page', () => {
     const { ServiceError } = await import('@/lib/services/errors');
 
     const product = await getProductBySlug('ridgeline-shell'); // stock 1
-    await addToCart(82731, product.id, 1);
-    expect((await getCart(82731)).items).toHaveLength(1);
+    await addToCart(browserContext(82731), product.id, 1);
+    expect((await getCart(browserContext(82731))).items).toHaveLength(1);
 
     // The action layer catches ServiceError and returns { error } for the form.
-    const error = await addToCart(82731, product.id, 1).catch((e) => e);
+    const error = await addToCart(browserContext(82731), product.id, 1).catch((e) => e);
     expect(error).toBeInstanceOf(ServiceError);
     expect(error.message).toMatch(/Ridgeline 3L Hardshell/);
   });

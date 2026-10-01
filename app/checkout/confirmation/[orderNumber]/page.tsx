@@ -4,6 +4,7 @@ import { Price } from '@/components/brand/Price';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { getOrder } from '@/lib/services/orders';
 import { NotFoundError } from '@/lib/services/errors';
+import { browserContext } from '@/lib/oauth/types';
 
 export default async function ConfirmationPage({
   params,
@@ -17,7 +18,7 @@ export default async function ConfirmationPage({
   try {
     // Scoped to this customer, so another customer's confirmation is a 404
     // rather than a readable receipt.
-    order = await getOrder(customer.id, Number(orderNumber));
+    order = await getOrder(browserContext(customer.id), Number(orderNumber));
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;

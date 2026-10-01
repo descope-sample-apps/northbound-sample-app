@@ -6,14 +6,15 @@ import { requireCustomer } from '@/lib/auth/session-cookie';
 import { getCart } from '@/lib/services/cart';
 import { listAddresses } from '@/lib/services/addresses';
 import { listPaymentMethods } from '@/lib/services/paymentMethods';
+import { browserContext } from '@/lib/oauth/types';
 
 export default async function CheckoutPage() {
   const customer = await requireCustomer();
 
   const [cart, addresses, paymentMethods] = await Promise.all([
-    getCart(customer.id),
-    listAddresses(customer.id),
-    listPaymentMethods(customer.id),
+    getCart(browserContext(customer.id)),
+    listAddresses(browserContext(customer.id)),
+    listPaymentMethods(browserContext(customer.id)),
   ]);
 
   if (cart.items.length === 0) redirect('/cart');

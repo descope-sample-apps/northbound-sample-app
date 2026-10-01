@@ -1,3 +1,4 @@
+import type { ActorContext } from '@/lib/oauth/types';
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db/client';
@@ -34,9 +35,10 @@ export type OrderDetail = Order & {
 };
 
 export async function placeOrder(
-  customerId: number,
+  ctx: ActorContext,
   rawInput: PlaceOrderInput,
 ): Promise<Order> {
+  const { customerId } = ctx;
   const parsed = PlaceOrderSchema.safeParse(rawInput);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
   const input = parsed.data;
@@ -155,9 +157,10 @@ export async function placeOrder(
 }
 
 export async function listOrders(
-  customerId: number,
+  ctx: ActorContext,
   options: { limit?: number } = {},
 ): Promise<OrderSummary[]> {
+  const { customerId } = ctx;
   // A join plus GROUP BY rather than a correlated subquery: the subquery form
   // silently failed to correlate and summed every order's items into each row.
   const rows = await db
@@ -176,9 +179,10 @@ export async function listOrders(
 }
 
 export async function getOrder(
-  customerId: number,
+  ctx: ActorContext,
   orderNumber: number,
 ): Promise<OrderDetail> {
+  const { customerId } = ctx;
   // NaN reaches here whenever a route param was not a number. Reject it before
   // it becomes a confusing database comparison.
   if (!Number.isInteger(orderNumber)) throw new NotFoundError('Order');

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getCurrentCustomer } from '@/lib/auth/session-cookie';
 import { getCart } from '@/lib/services/cart';
+import { browserContext } from '@/lib/oauth/types';
 import { logoutAction } from '@/app/login/actions';
 
 const LINKS = [
@@ -20,7 +21,7 @@ const linkClass =
  */
 export async function Nav() {
   const customer = await getCurrentCustomer();
-  const cart = customer ? await getCart(customer.id) : null;
+  const cart = customer ? await getCart(browserContext(customer.id)) : null;
   const itemCount = cart?.items.reduce((total, line) => total + line.quantity, 0) ?? 0;
 
   return (

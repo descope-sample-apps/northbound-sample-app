@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { removeFromCart, updateCartItem } from '@/lib/services/cart';
 import { ServiceError } from '@/lib/services/errors';
+import { browserContext } from '@/lib/oauth/types';
 
 export type CartActionState = { error?: string };
 
@@ -16,7 +17,7 @@ export async function updateQuantityAction(
   const quantity = Number(formData.get('quantity'));
 
   try {
-    await updateCartItem(customer.id, productId, quantity);
+    await updateCartItem(browserContext(customer.id), productId, quantity);
   } catch (error) {
     if (error instanceof ServiceError) return { error: error.message };
     throw error;
@@ -34,7 +35,7 @@ export async function removeItemAction(
   const customer = await requireCustomer();
 
   try {
-    await removeFromCart(customer.id, Number(formData.get('productId')));
+    await removeFromCart(browserContext(customer.id), Number(formData.get('productId')));
   } catch (error) {
     if (error instanceof ServiceError) return { error: error.message };
     throw error;

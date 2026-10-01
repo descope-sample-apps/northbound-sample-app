@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { placeOrder } from '@/lib/services/orders';
 import { PriceChangedError, ServiceError } from '@/lib/services/errors';
+import { browserContext } from '@/lib/oauth/types';
 
 export type CheckoutState = { error?: string };
 
@@ -17,7 +18,7 @@ export async function placeOrderAction(
   let orderNumber: number;
 
   try {
-    const order = await placeOrder(customer.id, {
+    const order = await placeOrder(browserContext(customer.id), {
       addressId: Number(formData.get('addressId')),
       paymentMethodId: Number(formData.get('paymentMethodId')),
       // The total the customer was actually shown. placeOrder refuses to charge
