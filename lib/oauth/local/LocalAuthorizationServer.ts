@@ -31,7 +31,7 @@ export class LocalAuthorizationServer implements AuthorizationServer {
       token_endpoint_auth_methods_supported: [
         'none', 'client_secret_basic', 'client_secret_post',
       ],
-      authorization_details_types_supported: ['checkout'],
+      authorization_details_types_supported: ['purchase'],
     };
   }
 

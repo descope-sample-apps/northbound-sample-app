@@ -29,7 +29,7 @@ const VALID = {
   redirect_uris: ['https://assistant.example/callback'],
   grant_types: ['authorization_code', 'refresh_token'],
   token_endpoint_auth_method: 'none' as const,
-  scope: 'products.read cart.write checkout',
+  scope: 'products:read cart:write checkout',
 };
 
 async function as() {
@@ -110,7 +110,7 @@ describe('dynamic client registration (RFC 7591)', () => {
   });
 
   it('rejects a scope this resource does not define', async () => {
-    await expect((await as()).registerClient({ ...VALID, scope: 'products.read wat.write' }))
+    await expect((await as()).registerClient({ ...VALID, scope: 'products:read wat:write' }))
       .rejects.toThrow(/scope/i);
   });
 

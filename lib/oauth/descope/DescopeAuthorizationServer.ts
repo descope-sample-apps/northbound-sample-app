@@ -45,7 +45,7 @@ export class DescopeAuthorizationServer implements AuthorizationServer {
       grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_basic'],
-      authorization_details_types_supported: ['checkout'],
+      authorization_details_types_supported: ['purchase'],
     };
   }
 

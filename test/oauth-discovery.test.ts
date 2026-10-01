@@ -43,9 +43,10 @@ describe('protected resource metadata (RFC 9728)', () => {
       expect(body.authorization_servers).toEqual(['https://shop.example']);
       expect(body.bearer_methods_supported).toEqual(['header']);
       expect(body.scopes_supported).toEqual([
-        'products.read', 'orders.read', 'cart.read', 'cart.write',
-        'checkout', 'profile.read', 'addresses.write', 'payment_methods.write',
+        'products:read', 'orders:read', 'cart:read', 'cart:write',
+        'checkout', 'profile:read', 'addresses:write', 'payment_methods:write',
       ]);
+      expect(body.authorization_details_types_supported).toEqual(['purchase']);
     });
 
   // A token in a query string lands in access logs and browser history. This
@@ -103,10 +104,10 @@ describe('authorization server metadata (RFC 8414)', () => {
     expect(body.response_types_supported).toEqual(['code']);
   });
 
-  it('advertises the checkout authorization_details type', async () => {
+  it('advertises the purchase authorization_details type', async () => {
     const { GET } = await import('@/app/.well-known/oauth-authorization-server/route');
     const body = await (await GET(req('https://shop.example/.well-known/oauth-authorization-server'))).json();
-    expect(body.authorization_details_types_supported).toEqual(['checkout']);
+    expect(body.authorization_details_types_supported).toEqual(['purchase']);
   });
 
   it('honours x-forwarded-host from a proxy', async () => {

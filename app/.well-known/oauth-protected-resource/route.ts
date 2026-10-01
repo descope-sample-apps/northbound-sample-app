@@ -17,6 +17,9 @@ export async function GET(request: Request): Promise<Response> {
       resource: resourceIdentifier(issuer),
       authorization_servers: [issuer],
       scopes_supported: SCOPES,
+      // The blog's PRM example advertises this, and an agent that reads it
+      // knows to send a purchase grant rather than guessing at the shape.
+      authorization_details_types_supported: ['purchase'],
       // Header only. A token in a query string ends up in access logs, proxy
       // logs and browser history, and nothing here needs that.
       bearer_methods_supported: ['header'],

@@ -24,9 +24,14 @@ const claims = {
   customerId: 82731,
   agentId: 'agent_shopping_assistant',
   clientId: 'shopping-assistant',
-  scope: 'products.read cart.write checkout',
+  scope: 'products:read cart:write checkout',
   authorizationDetails: [
-    { type: 'checkout' as const, maximum_amount: '10000', currency: 'USD' },
+    {
+      type: 'purchase' as const,
+      max_amount: { value: '200.00', currency: 'USD' },
+      merchant: 'northbound.example.com',
+      period: 'P7D',
+    },
   ],
 };
 
@@ -40,16 +45,21 @@ describe('access tokens', () => {
     expect(verified.act).toEqual({ sub: 'agent_shopping_assistant' });
     expect(verified.client_id).toBe('shopping-assistant');
     expect(verified.aud).toBe(AUDIENCE);
-    expect(verified.scope).toBe('products.read cart.write checkout');
+    expect(verified.scope).toBe('products:read cart:write checkout');
   });
 
-  it('carries authorization_details with a minor-units string amount', async () => {
+  it('carries the blog\'s purchase authorization_details verbatim', async () => {
     const { signAccessToken, verifyAccessTokenSignature } = await import('@/lib/oauth/jwt');
     const { token } = await signAccessToken(claims, ISSUER);
     const verified = await verifyAccessTokenSignature(token, ISSUER, AUDIENCE);
 
     expect(verified.authorization_details).toEqual([
-      { type: 'checkout', maximum_amount: '10000', currency: 'USD' },
+      {
+        type: 'purchase',
+        max_amount: { value: '200.00', currency: 'USD' },
+        merchant: 'northbound.example.com',
+        period: 'P7D',
+      },
     ]);
   });
 
