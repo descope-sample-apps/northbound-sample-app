@@ -11,7 +11,19 @@ import type { VerificationResult } from './verify';
  * "unknown platform" into "unverified" would throw away the accountability
  * that signing provides.
  */
-export type AgentTier = 'verified-trusted' | 'verified-unknown' | 'unverified';
+export type AgentTier =
+  | 'verified-trusted'
+  | 'verified-unknown'
+  /**
+   * The agent clicked a button on /agents saying which platform it is.
+   *
+   * That is a CLAIM, not proof — anyone can click it. It earns a name on the
+   * consent screen and in the audit log, and nothing else. If a button could
+   * reach a purchasing tier, signing would buy nothing and the tier table
+   * above it would be decorative.
+   */
+  | 'declared'
+  | 'unverified';
 
 export const MERCHANT = 'northbound.example.com';
 
@@ -36,6 +48,8 @@ const CAPS: Record<AgentTier, PurchaseAuthorizationDetail | null> = {
     merchant: MERCHANT,
     period: 'P7D',
   },
+  // A claim is not a credential. Named, but may not buy.
+  declared: null,
   unverified: null,
 };
 
@@ -76,7 +90,8 @@ export function capForTier(tier: AgentTier): PurchaseAuthorizationDetail | null 
 
 /** Note that `payment_methods:write` is on no tier's list, at any trust level. */
 export function scopesForTier(tier: AgentTier): Scope[] {
-  return tier === 'unverified' ? [...READ_ONLY_SCOPES] : [...PURCHASING_SCOPES];
+  const canPurchase = tier === 'verified-trusted' || tier === 'verified-unknown';
+  return canPurchase ? [...PURCHASING_SCOPES] : [...READ_ONLY_SCOPES];
 }
 
 /** A sentence the customer will read on the approval screen. */

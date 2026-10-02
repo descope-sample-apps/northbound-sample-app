@@ -1,0 +1,48 @@
+{
+  "_comment": [
+    "Agent platforms Northbound recognises.",
+    "",
+    "Each platform is reachable two ways, with very different standing:",
+    "  directoryHosts  a Web Bot Auth key directory. A signature that verifies",
+    "                  against a key published here PROVES the agent's identity.",
+    "  key             the button on /agents. Clicking it CLAIMS an identity.",
+    "",
+    "`trusted: true` only ever applies to the proven path. A button click lands",
+    "on the 'declared' tier no matter which platform it names, so nobody can",
+    "click their way to a spending cap.",
+    "",
+    "descopeClientIdEnv names the environment variable holding the Descope",
+    "Inbound App client for this platform — the client is what carries the",
+    "agent's identity into a Descope policy. The IDs themselves are not",
+    "committed; they are project configuration, not source."
+  ],
+  "platforms": [
+    {
+      "key": "muse",
+      "displayName": "Muse",
+      "owner": "Meta",
+      "logoPath": "/agents/muse.svg",
+      "directoryHosts": ["agents.muse.example"],
+      "trusted": true,
+      "descopeClientIdEnv": "DESCOPE_CLIENT_MUSE"
+    },
+    {
+      "key": "instinct",
+      "displayName": "Instinct",
+      "owner": "Instinct",
+      "logoPath": "/agents/instinct.svg",
+      "directoryHosts": ["agents.instinct.example"],
+      "trusted": true,
+      "descopeClientIdEnv": "DESCOPE_CLIENT_INSTINCT"
+    },
+    {
+      "key": "shopping-assistant",
+      "displayName": "Shopping Assistant",
+      "owner": "Northbound Labs",
+      "logoPath": "/agents/shopping-assistant.svg",
+      "directoryHosts": ["localhost:4455"],
+      "trusted": true,
+      "descopeClientIdEnv": "DESCOPE_CLIENT_SHOPPING_ASSISTANT"
+    }
+  ]
+}
