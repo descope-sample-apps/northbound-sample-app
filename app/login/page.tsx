@@ -4,8 +4,15 @@ import { AuthForm } from '@/components/brand/AuthForm';
 import { getCurrentCustomer } from '@/lib/auth/session-cookie';
 import { loginAction } from './actions';
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (await getCurrentCustomer()) redirect('/');
+
+  const nextParam = (await searchParams).next;
+  const next = Array.isArray(nextParam) ? nextParam[0] : nextParam;
 
   return (
     <main className="mx-auto max-w-md px-6 py-20">
@@ -20,6 +27,7 @@ export default async function LoginPage() {
           mode="login"
           submitLabel="Sign in"
           pendingLabel="Signing in…"
+          next={next}
         />
       </div>
 

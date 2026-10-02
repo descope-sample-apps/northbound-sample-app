@@ -42,7 +42,24 @@ export async function loginAction(
   const userAgent = (await headers()).get('user-agent') ?? undefined;
   await setSessionCookie(await createSession(result.customerId, userAgent));
 
-  redirect('/');
+  redirect(safeNext(formData.get('next')));
+}
+
+/**
+ * Where to send the customer after signing in.
+ *
+ * Only a same-origin PATH is honoured — it must start with a single `/` and
+ * must not start with `//`, which browsers read as a protocol-relative URL to
+ * another host. Anything else falls back to the home page.
+ *
+ * Without this, `?next=` is an open redirect, and an open redirect on a login
+ * page is a phishing primitive: the link looks like Northbound, the password
+ * goes to Northbound, and the customer lands somewhere else entirely.
+ */
+function safeNext(value: FormDataEntryValue | null): string {
+  const next = typeof value === 'string' ? value.trim() : '';
+  if (!next.startsWith('/') || next.startsWith('//')) return '/';
+  return next;
 }
 
 /**

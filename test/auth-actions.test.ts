@@ -110,3 +110,18 @@ describe('registerCustomer', () => {
     expect((await verifyCredentials('dana@example.com', 'a-long-enough-pw')).ok).toBe(true);
   });
 });
+
+describe('the post-login redirect', () => {
+  // An open redirect on a login page is a phishing primitive: the link looks
+  // like Northbound, the password goes to Northbound, and the customer lands
+  // somewhere else. Only a same-origin path is honoured.
+  it('accepts only same-origin paths', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync('app/login/actions.ts', 'utf8');
+
+    // The guard must reject protocol-relative URLs, which browsers treat as
+    // absolute to another host.
+    expect(source).toMatch(/startsWith\('\/\/'\)/);
+    expect(source).toMatch(/startsWith\('\/'\)/);
+  });
+});

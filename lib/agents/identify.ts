@@ -22,15 +22,23 @@ export type AgentIdentity = {
   keyId?: string;
 
   /**
-   * CIMD binding.
+   * CIMD binding. APPLIES TO ONE OF THE TWO AGENT PATHS ONLY.
    *
-   * Northbound does NOT fetch or validate the client metadata document — that
-   * is the authorization server's job, and Descope does it. What Northbound
-   * does is compare hosts, because whether a mismatch is acceptable is
-   * Northbound's policy rather than its IdP's.
+   *   Path A — the agent is itself an OAuth client. It discovers the
+   *     authorization server, identifies with CIMD (or DCR, or a
+   *     pre-registered client), and gets its own token. It never sees /agents.
    *
-   * Undefined when no URL-shaped client_id was presented, which is the normal
-   * case for a pre-registered client.
+   *   Path B — a computer-use agent drives a browser, or calls
+   *     /api/agent/authorize. It is NOT an OAuth client and has no client_id.
+   *     NORTHBOUND is the client here, holding one Descope client per agent
+   *     platform so the agent's identity reaches a policy through client.tags.
+   *
+   * These fields are only ever set on Path A, where a client_id exists to
+   * compare. The Muse-and-Instinct button flow is Path B and never reaches
+   * them — which is correct, not an oversight.
+   *
+   * Northbound does NOT fetch or validate the metadata document; that is the
+   * authorization server's job. Comparing hosts is Northbound's own policy.
    */
   cimdHost?: string;
   cimdHostMatchesDirectory?: boolean;

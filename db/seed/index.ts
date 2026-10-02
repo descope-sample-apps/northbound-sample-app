@@ -16,6 +16,7 @@ import { seedAgents } from './agents';
  */
 export async function seedAll(db: LibSQLDatabase<typeof schema>): Promise<void> {
   // Delete in foreign-key-safe order: children before parents.
+  await db.delete(schema.backchannelRequests);
   await db.delete(schema.tokens);
   await db.delete(schema.authorizationCodes);
   await db.delete(schema.authorizationRequests);

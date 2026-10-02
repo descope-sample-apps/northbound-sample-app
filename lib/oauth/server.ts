@@ -174,3 +174,4 @@ export function getAuthorizationServer(): AuthorizationServer {
   localInstance ??= new LocalAuthorizationServer();
   return localInstance;
 }
+

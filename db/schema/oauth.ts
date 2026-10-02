@@ -115,3 +115,55 @@ export type OAuthClient = typeof oauthClients.$inferSelect;
 export type AuthorizationRequest = typeof authorizationRequests.$inferSelect;
 export type AuthorizationCode = typeof authorizationCodes.$inferSelect;
 export type TokenRecord = typeof tokens.$inferSelect;
+
+/**
+ * Pending CIBA (backchannel) authorizations.
+ *
+ * Separate from `authorizationRequests` because CIBA has neither a redirect URI
+ * nor a PKCE challenge — there is no browser in the loop on the agent's side.
+ * Overloading one table would have meant making both of those nullable and
+ * losing the constraint that makes the authorization-code path safe.
+ *
+ * The agent's identity is DENORMALISED onto the row on purpose. The consent
+ * screen and the audit log both have to say who asked, and both must keep
+ * saying it correctly even if the platform registry changes afterwards. What
+ * the customer approved is a fact about that moment.
+ */
+export const backchannelRequests = sqliteTable('backchannel_requests', {
+  /** The `auth_req_id` the agent polls with. */
+  id: text('id').primaryKey(),
+  clientId: text('client_id'),
+  agentId: text('agent_id').references(() => agents.id),
+
+  agentDisplayName: text('agent_display_name').notNull(),
+  agentTier: text('agent_tier', {
+    enum: ['verified-trusted', 'verified-unknown', 'declared', 'unverified'],
+  }).notNull(),
+  agentVerified: integer('agent_verified', { mode: 'boolean' }).notNull(),
+  agentDirectoryUrl: text('agent_directory_url'),
+
+  /** The address the agent asserted. Unverified until it matches a customer. */
+  loginHint: text('login_hint').notNull(),
+  /** Resolved customer, or NULL when the hint matched nobody. */
+  customerId: integer('customer_id').references(() => customers.id),
+
+  scope: text('scope').notNull(),
+  /** The sentence the customer reads before approving. */
+  bindingMessage: text('binding_message').notNull(),
+  authorizationDetails: text('authorization_details'),
+
+  /** Set when this is a step-up for one specific order rather than a grant. */
+  stepUpForOrderId: integer('step_up_for_order_id'),
+
+  status: text('status', {
+    enum: ['pending', 'approved', 'denied', 'expired'],
+  }).notNull(),
+  pollIntervalSeconds: integer('poll_interval_seconds').notNull(),
+
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  lastPolledAt: integer('last_polled_at', { mode: 'timestamp' }),
+  decidedAt: integer('decided_at', { mode: 'timestamp' }),
+});
+
+export type BackchannelRequest = typeof backchannelRequests.$inferSelect;

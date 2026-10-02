@@ -15,6 +15,13 @@
       "when": 1790068741001,
       "tag": "0001_perfect_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790904299220,
+      "tag": "0002_plain_scarecrow",
+      "breakpoints": true
     }
   ]
 }

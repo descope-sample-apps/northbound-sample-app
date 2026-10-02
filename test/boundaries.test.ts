@@ -41,14 +41,27 @@ const STOREFRONT_DIRS = ['app', 'lib', 'components'];
  * Adding an entry here is a deliberate act. If a storefront page ever needs to
  * be listed, that is the finding, not the fix.
  */
-const OAUTH_DIRS = [
-  join('lib', 'oauth'),        // the authorization server itself
-  join('lib', 'webbotauth'),   // RFC 9421 agent verification and the tier policy
-  join('app', 'oauth'),        // its endpoints and consent screen
-  join('app', 'api'),          // the bearer-only resource server
-  join('app', 'agents'),       // the agent sign-in page
+/**
+ * Pages a HUMAN sees that are nonetheless part of the agent boundary: the
+ * consent screen, the approval screen, the agent sign-in page. They are
+ * storefront-shaped but they are not the shop.
+ */
+const AGENT_FACING_PAGES = [
+  join('app', 'oauth'),     // consent screen
+  join('app', 'agents'),    // the agent sign-in page
+  join('app', 'approve'),   // CIBA approval screen
+];
+
+/** Machinery with no human-facing page in it at all. */
+const MACHINE_SURFACES = [
+  join('lib', 'oauth'),        // the authorization server
+  join('lib', 'webbotauth'),   // RFC 9421 verification and the tier policy
+  join('lib', 'agents'),       // agent identity resolution
+  join('app', 'api'),          // the resource server and the authorize endpoint
   join('app', '.well-known'),  // discovery documents
 ];
+
+const OAUTH_DIRS = [...AGENT_FACING_PAGES, ...MACHINE_SURFACES];
 
 const isOauthSurface = (file: string) =>
   OAUTH_DIRS.some((dir) => file.startsWith(dir + sep));
@@ -127,12 +140,21 @@ describe('sub-project A contains no agent concepts', () => {
 
   // The allowlist above is only trustworthy if it stays narrow. A storefront
   // page appearing in it would mean OAuth had leaked into the shop.
-  it('keeps every storefront page out of the OAuth allowlist', () => {
-    const storefrontPages = sourceFiles('app')
+  it('keeps every shop page out of the agent surfaces', () => {
+    // A page may be on the agent boundary (consent, approval, /agents) or it
+    // may be a shop page. If a shop page ever appeared inside a machine
+    // surface, OAuth would have leaked into the storefront.
+    const pagesInMachineSurfaces = sourceFiles('app')
       .filter((file) => /page\.tsx$/.test(file))
-      .filter((file) => isOauthSurface(file));
+      .filter((file) => MACHINE_SURFACES.some((dir) => file.startsWith(dir + sep)));
 
-    expect(storefrontPages.filter((f) => !f.startsWith(join('app', 'oauth')))).toEqual([]);
+    expect(pagesInMachineSurfaces).toEqual([]);
+  });
+
+  it('keeps the agent-facing page list short and deliberate', () => {
+    // Three screens: consent, approval, and the agent sign-in page. Growth here
+    // should be a decision somebody made, not something that happened.
+    expect(AGENT_FACING_PAGES).toHaveLength(3);
   });
 
   it('exposes exactly one non-OAuth HTTP route, and it is not under /api', () => {
