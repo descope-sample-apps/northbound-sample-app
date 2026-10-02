@@ -80,3 +80,35 @@ export class ConcurrencyError extends ServiceError {
     super('Someone else was checking out at the same moment. Please try again.');
   }
 }
+
+/**
+ * The agent tried to spend beyond what the customer approved.
+ *
+ * Carries the numbers so the agent can relay something useful to the person who
+ * asked for the purchase, rather than just failing. That matters: an agent that
+ * can say "you approved $200 a week and this would be $260" is far more useful
+ * than one that says "403".
+ */
+export class PurchaseLimitError extends ServiceError {
+  readonly code = 'purchase_limit_exceeded';
+
+  constructor(
+    message: string,
+    readonly limitCents: number | null,
+    readonly spentCents: number,
+    readonly attemptedCents: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * An agent attempted something no agent may do, at any trust level.
+ *
+ * Distinct from a missing scope. A scope says "you were not granted this"; this
+ * says "nobody grants this to an agent" — there is no token, no tier and no
+ * consent screen that would make it allowed.
+ */
+export class AgentForbiddenError extends ServiceError {
+  readonly code = 'agent_forbidden';
+}

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '@/db/client';
 import { customers } from '@/db/schema';
 import { NotFoundError, ValidationError } from './errors';
+import { refuseAgents } from './agentForbidden';
 
 export type Profile = {
   id: number;
@@ -57,6 +58,7 @@ export async function updateProfile(
   input: z.input<typeof UpdateProfileSchema>,
 ): Promise<void> {
   const { customerId } = ctx;
+  refuseAgents(ctx, 'Changing account details');
   const parsed = UpdateProfileSchema.safeParse(input);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
 

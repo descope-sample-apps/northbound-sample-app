@@ -8,6 +8,7 @@ import {
 } from '@/db/schema';
 import { calcTotals } from '@/lib/money';
 import { withWriteLock } from './writeLock';
+import { assertWithinPurchaseGrant } from './purchaseLimit';
 import {
   NotFoundError, OutOfStockError, OwnershipError, PriceChangedError, ValidationError,
 } from './errors';
@@ -101,6 +102,10 @@ export async function placeOrder(
       throw new PriceChangedError(input.expectedTotalCents, totals.totalCents);
     }
 
+    // The guardrail. Checked AFTER totals are known and BEFORE anything is
+    // written, so a refusal leaves the cart and the stock untouched.
+    await assertWithinPurchaseGrant(tx, ctx, totals.totalCents);
+
     for (const { item, product } of lines) {
       // Relative UPDATE with a guard, not read-then-write. The guard is what
       // keeps this correct on an engine without SQLite's single-writer lock —
@@ -139,6 +144,9 @@ export async function placeOrder(
       totalCents: totals.totalCents,
       shippingAddressId: address.id,
       paymentMethodId: payment.id,
+      // Recorded on every order, so support and the customer can both see
+      // which actions were theirs and which were their agent's.
+      agentId: ctx.actor?.agentId ?? null,
     }).returning();
 
     await tx.insert(orderItems).values(lines.map(({ item, product }) => ({

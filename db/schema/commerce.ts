@@ -39,6 +39,16 @@ export const orders = sqliteTable('orders', {
   totalCents: integer('total_cents').notNull(),
   shippingAddressId: integer('shipping_address_id').notNull().references(() => addresses.id),
   paymentMethodId: integer('payment_method_id').notNull().references(() => paymentMethods.id),
+
+  /**
+   * The agent that placed this order, if one did.
+   *
+   * NULL means the customer placed it themselves. That distinction is the
+   * whole point: the activity log shows both in the same list, and the
+   * spending cap is measured per agent over its own orders — an agent cannot
+   * exhaust its limit by counting purchases the customer made.
+   */
+  agentId: text('agent_id'),
 });
 
 // nameSnapshot and unitPriceCents exist so order history does not silently

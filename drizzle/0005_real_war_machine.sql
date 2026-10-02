@@ -1,0 +1,1 @@
+ALTER TABLE `orders` ADD `agent_id` text;
