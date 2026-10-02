@@ -72,6 +72,7 @@ export async function startBackchannelAuthorization(params: {
     agentTier: identity.tier,
     agentVerified: identity.verified,
     agentDirectoryUrl: identity.directoryUrl ?? null,
+    agentKeyId: identity.keyId ?? null,
     loginHint: normalizedHint,
     customerId: customer?.id ?? null,
     scope: scopes.join(' '),
@@ -117,6 +118,10 @@ export async function pollBackchannelRequest(authReqId: string): Promise<Backcha
 
   if (request.status === 'expired') return { status: 'expired_token' };
 
+  // Already collected. Reported as invalid_grant rather than expired_token so a
+  // replayed exchange is indistinguishable from an id that never existed.
+  if (request.status === 'consumed') return { status: 'invalid_grant' };
+
   if (request.status === 'approved') return { status: 'approved', request };
 
   const tooSoon = request.lastPolledAt
@@ -128,6 +133,15 @@ export async function pollBackchannelRequest(authReqId: string): Promise<Backcha
     .where(eq(backchannelRequests.id, authReqId));
 
   return tooSoon ? { status: 'slow_down' } : { status: 'authorization_pending' };
+}
+
+/** The raw row, for callers that need its status or its bound key. */
+export async function getBackchannelRequest(
+  authReqId: string,
+): Promise<BackchannelRequest | null> {
+  const [request] = await db.select().from(backchannelRequests)
+    .where(eq(backchannelRequests.id, authReqId)).limit(1);
+  return request ?? null;
 }
 
 /** What the approval page shows. Only ever returns a still-pending request. */

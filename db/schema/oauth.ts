@@ -99,7 +99,15 @@ export const tokens = sqliteTable('tokens', {
   kind: text('kind', { enum: ['access', 'refresh'] }).notNull(),
   tokenHash: text('token_hash').notNull().unique(),
   jti: text('jti').notNull(),
-  clientId: text('client_id').notNull().references(() => oauthClients.clientId),
+  /**
+   * The OAuth client, when there is one.
+   *
+   * NULL for a token issued through Northbound's own backchannel: in that flow
+   * the agent is not an OAuth client at all — Northbound is, holding one
+   * Descope client per agent platform. `agentId` is what identifies the actor
+   * on that path.
+   */
+  clientId: text('client_id').references(() => oauthClients.clientId),
   agentId: text('agent_id').references(() => agents.id),
   customerId: integer('customer_id').references(() => customers.id),
   scope: text('scope').notNull(),
@@ -141,6 +149,14 @@ export const backchannelRequests = sqliteTable('backchannel_requests', {
   }).notNull(),
   agentVerified: integer('agent_verified', { mode: 'boolean' }).notNull(),
   agentDirectoryUrl: text('agent_directory_url'),
+  /**
+   * The key that signed the original request, when there was one.
+   *
+   * Polling must present a signature from the SAME key. Otherwise auth_req_id
+   * is a bearer secret on its own, and anyone who observed it could collect a
+   * token the customer approved for somebody else.
+   */
+  agentKeyId: text('agent_key_id'),
 
   /** The address the agent asserted. Unverified until it matches a customer. */
   loginHint: text('login_hint').notNull(),
@@ -155,8 +171,13 @@ export const backchannelRequests = sqliteTable('backchannel_requests', {
   /** Set when this is a step-up for one specific order rather than a grant. */
   stepUpForOrderId: integer('step_up_for_order_id'),
 
+  /**
+   * `consumed` is distinct from `expired` on purpose: one means the agent
+   * collected the grant, the other means nobody did before the window closed.
+   * Both are dead to a poller, but the activity log needs to tell them apart.
+   */
   status: text('status', {
-    enum: ['pending', 'approved', 'denied', 'expired'],
+    enum: ['pending', 'approved', 'denied', 'expired', 'consumed'],
   }).notNull(),
   pollIntervalSeconds: integer('poll_interval_seconds').notNull(),
 

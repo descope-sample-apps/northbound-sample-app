@@ -1,0 +1,1 @@
+ALTER TABLE `backchannel_requests` ADD `agent_key_id` text;
