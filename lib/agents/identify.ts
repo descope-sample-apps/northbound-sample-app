@@ -20,6 +20,21 @@ export type AgentIdentity = {
   needsDescopeClient: boolean;
   directoryUrl?: string;
   keyId?: string;
+
+  /**
+   * CIMD binding.
+   *
+   * Northbound does NOT fetch or validate the client metadata document — that
+   * is the authorization server's job, and Descope does it. What Northbound
+   * does is compare hosts, because whether a mismatch is acceptable is
+   * Northbound's policy rather than its IdP's.
+   *
+   * Undefined when no URL-shaped client_id was presented, which is the normal
+   * case for a pre-registered client.
+   */
+  cimdHost?: string;
+  cimdHostMatchesDirectory?: boolean;
+
   /** Why verification failed, for the audit log. Never shown to the agent. */
   reason?: string;
 };
@@ -39,7 +54,12 @@ export type AgentIdentity = {
  */
 export async function identifyAgent(
   request: Request,
-  options: { declaredPlatform?: string; fetchImpl?: typeof fetch } = {},
+  options: {
+    declaredPlatform?: string;
+    /** The client_id the agent presented. A URL means CIMD. */
+    clientId?: string;
+    fetchImpl?: typeof fetch;
+  } = {},
 ): Promise<AgentIdentity> {
   const hasSignature = request.headers.has('signature');
 
@@ -51,11 +71,23 @@ export async function identifyAgent(
       const platform = platformByDirectoryHost(host);
 
       // `trusted` applies only on the proven path, which is this one.
-      const tier: AgentTier = platform?.trusted ? 'verified-trusted' : 'verified-unknown';
+      let tier: AgentTier = platform?.trusted ? 'verified-trusted' : 'verified-unknown';
       const descopeClientId = descopeClientIdFor(platform);
+
+      // If the agent presented a URL as its client_id (CIMD), it should live on
+      // the same host as the key it signed with. A mismatch is not necessarily
+      // an attack — plenty of platforms host keys on a CDN and metadata on
+      // their app domain — so it still verifies. It just cannot reach the tier
+      // that carries a $200 cap, and the customer gets told.
+      const binding = cimdBinding(options.clientId, host);
+      if (binding.matches === false && tier === 'verified-trusted') {
+        tier = 'verified-unknown';
+      }
 
       return {
         tier,
+        cimdHost: binding.host,
+        cimdHostMatchesDirectory: binding.matches,
         verified: true,
         platformKey: platform?.key ?? null,
         // An unregistered platform is still named — by its directory — so the
@@ -84,6 +116,29 @@ export async function identifyAgent(
   return unidentified(options.declaredPlatform
     ? 'declared an unregistered platform'
     : 'no signature and no declared platform');
+}
+
+/**
+ * A URL-shaped client_id is a CIMD document; an opaque string is a
+ * pre-registered client and carries no host to compare. The two must not be
+ * conflated, or every pre-registered client would look like a failed binding.
+ */
+function cimdBinding(
+  clientId: string | undefined,
+  directoryHost: string,
+): { host?: string; matches?: boolean } {
+  if (!clientId) return {};
+
+  let url: URL;
+  try {
+    url = new URL(clientId);
+  } catch {
+    return {}; // not a URL: a pre-registered client id
+  }
+
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return {};
+
+  return { host: url.host, matches: url.host === directoryHost };
 }
 
 function declared(platform: AgentPlatform): AgentIdentity {
@@ -129,6 +184,11 @@ export function consentDescription(identity: AgentIdentity): string {
     case 'verified-trusted':
       return `${identity.displayName} — verified, and a platform Northbound recognises.`;
     case 'verified-unknown':
+      if (identity.cimdHostMatchesDirectory === false) {
+        return `${identity.displayName} — verified its identity, but its client `
+          + `details are published on a different host (${identity.cimdHost}) from `
+          + `the key it signed with. Northbound has limited what it can do.`;
+      }
       return `${identity.displayName} — verified its identity, but Northbound has no `
         + `relationship with this platform.`;
     case 'declared':

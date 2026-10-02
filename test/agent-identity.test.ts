@@ -242,3 +242,94 @@ describe('what the customer is told', () => {
     } as never)).toMatch(/verified/i);
   });
 });
+
+/**
+ * CIMD binding.
+ *
+ * Web Bot Auth and CIMD are the same shape — the agent hosts a document at an
+ * HTTPS URL that identifies it. When both are present they should agree, or
+ * an agent could sign as one identity and present a client belonging to
+ * another.
+ *
+ * Northbound does not fetch or validate the CIMD document; that is the
+ * authorization server's job. What it does is compare the hosts, because
+ * whether a mismatch is acceptable is Northbound's policy, not Descope's.
+ */
+describe('CIMD host binding', () => {
+  const MUSE_CIMD = 'https://agents.muse.example/client-metadata.json';
+  const ELSEWHERE_CIMD = 'https://cdn.somewhere-else.example/client-metadata.json';
+
+  async function identifyWithClient(request: Request, clientId?: string) {
+    const { identifyAgent } = await import('@/lib/agents/identify');
+    return identifyAgent(request, { clientId });
+  }
+
+  it('keeps the trusted tier when the CIMD host matches the key directory', async () => {
+    await publish(MUSE_DIRECTORY, muse.publicKey);
+    const identity = await identifyWithClient(
+      await signedRequest(muse.privateKey, MUSE_DIRECTORY), MUSE_CIMD,
+    );
+
+    expect(identity.tier).toBe('verified-trusted');
+    expect(identity.cimdHostMatchesDirectory).toBe(true);
+  });
+
+  // A mismatch is not necessarily an attack — plenty of platforms host keys on
+  // a CDN and metadata on their app domain — so it still verifies. It just
+  // cannot reach the tier that comes with a spending cap of $200.
+  it('caps a mismatched agent at verified-unknown and records why', async () => {
+    await publish(MUSE_DIRECTORY, muse.publicKey);
+    const identity = await identifyWithClient(
+      await signedRequest(muse.privateKey, MUSE_DIRECTORY), ELSEWHERE_CIMD,
+    );
+
+    expect(identity.verified).toBe(true);
+    expect(identity.tier).toBe('verified-unknown');
+    expect(identity.cimdHostMatchesDirectory).toBe(false);
+    expect(identity.cimdHost).toBe('cdn.somewhere-else.example');
+  });
+
+  it('tells the customer about the mismatch on the consent screen', async () => {
+    const { consentDescription } = await import('@/lib/agents/identify');
+    const text = consentDescription({
+      tier: 'verified-unknown',
+      displayName: 'Muse',
+      verified: true,
+      cimdHostMatchesDirectory: false,
+      cimdHost: 'cdn.somewhere-else.example',
+      directoryUrl: MUSE_DIRECTORY,
+    } as never);
+
+    expect(text).toMatch(/different host|does not match|elsewhere/i);
+  });
+
+  it('leaves the tier alone when no client_id is presented at all', async () => {
+    await publish(MUSE_DIRECTORY, muse.publicKey);
+    const identity = await identifyWithClient(
+      await signedRequest(muse.privateKey, MUSE_DIRECTORY),
+    );
+
+    expect(identity.tier).toBe('verified-trusted');
+    expect(identity.cimdHostMatchesDirectory).toBeUndefined();
+  });
+
+  // A pre-registered client id is an opaque string, not a URL. It carries no
+  // host to compare, and must not be mistaken for a failed CIMD binding.
+  it('ignores a non-URL client_id, which is a pre-registered client', async () => {
+    await publish(MUSE_DIRECTORY, muse.publicKey);
+    const identity = await identifyWithClient(
+      await signedRequest(muse.privateKey, MUSE_DIRECTORY), 'nbc_0123456789abcdef',
+    );
+
+    expect(identity.tier).toBe('verified-trusted');
+    expect(identity.cimdHostMatchesDirectory).toBeUndefined();
+  });
+
+  it('never lets a CIMD host promote an unverified agent', async () => {
+    const plain = new Request('https://northbound.example/api/agent/authorize', {
+      method: 'POST', body: '{}',
+    });
+    const identity = await identifyWithClient(plain, MUSE_CIMD);
+    expect(identity.tier).toBe('unverified');
+  });
+});

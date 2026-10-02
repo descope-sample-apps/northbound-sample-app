@@ -24,6 +24,19 @@ export const DEMO_PASSWORDS = {
   carol: 'summit-ridge-4410',
 } as const;
 
+/**
+ * Alice's address, overridable for a live demo.
+ *
+ * CIBA sends the approval to whatever `login_hint` the agent supplied, and for
+ * the flow to resolve to an account that address has to belong to a real
+ * customer. `alice@example.com` is reserved fiction and reaches no inbox, so a
+ * hosted demo sets DEMO_CUSTOMER_EMAIL to an address someone actually reads.
+ *
+ * The seeded password does not change, so the README stays correct either way.
+ */
+export const DEMO_CUSTOMER_EMAIL =
+  process.env.DEMO_CUSTOMER_EMAIL?.trim().toLowerCase() || 'alice@example.com';
+
 export const ALICE_ID = 82_731;
 export const BOB_ID = 19_382;
 export const CAROL_ID = 44_102;
@@ -34,7 +47,7 @@ export async function seedCustomers(db: LibSQLDatabase<typeof schema>): Promise<
   await db.insert(schema.customers).values([
     {
       id: ALICE_ID,
-      email: 'alice@example.com',
+      email: DEMO_CUSTOMER_EMAIL,
       name: 'Alice Chen',
       emailVerified: true,
       passwordHash: await hashPassword(DEMO_PASSWORDS.alice),

@@ -159,3 +159,22 @@ describe('full seed', () => {
     expect(await tdb.db.select().from(schema.orders)).toHaveLength(16);
   });
 });
+
+describe('the demo customer address', () => {
+  // CIBA sends approval to the login_hint the agent supplied, and that address
+  // has to belong to a real customer for the flow to resolve to an account.
+  it('defaults to the documented fiction', async () => {
+    const { DEMO_CUSTOMER_EMAIL } = await import('@/db/seed/customers');
+    expect(DEMO_CUSTOMER_EMAIL).toBe('alice@example.com');
+  });
+
+  it('is what Alice is seeded with, so a hosted demo reaches a real inbox', async () => {
+    const schema = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const { DEMO_CUSTOMER_EMAIL } = await import('@/db/seed/customers');
+
+    const [alice] = await tdb.db.select().from(schema.customers)
+      .where(eq(schema.customers.id, 82731));
+    expect(alice.email).toBe(DEMO_CUSTOMER_EMAIL);
+  });
+});
