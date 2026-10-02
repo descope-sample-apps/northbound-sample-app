@@ -74,6 +74,7 @@ export async function assertWithinPurchaseGrant(
 
   if (spentCents + totalCents > limitCents) {
     const remaining = Math.max(0, limitCents - spentCents);
+
     throw new PurchaseLimitError(
       `This order is ${formatCents(totalCents)}, and you approved a limit of `
       + `${formatCents(limitCents)} per ${describePeriod(grant.period)}. `

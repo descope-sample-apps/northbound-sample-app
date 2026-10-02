@@ -58,7 +58,7 @@ export async function updateProfile(
   input: z.input<typeof UpdateProfileSchema>,
 ): Promise<void> {
   const { customerId } = ctx;
-  refuseAgents(ctx, 'Changing account details');
+  await refuseAgents(ctx, 'Changing account details');
   const parsed = UpdateProfileSchema.safeParse(input);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
 

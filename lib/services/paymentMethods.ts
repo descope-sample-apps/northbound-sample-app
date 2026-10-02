@@ -52,7 +52,7 @@ export async function addPaymentMethod(
   raw: PaymentMethodInput,
 ): Promise<PaymentMethod> {
   const { customerId } = ctx;
-  refuseAgents(ctx, 'Adding a payment method');
+  await refuseAgents(ctx, 'Adding a payment method');
   const parsed = PaymentMethodSchema.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message);
 
@@ -67,7 +67,7 @@ export async function addPaymentMethod(
 
 export async function deletePaymentMethod(ctx: ActorContext, id: number): Promise<void> {
   const { customerId } = ctx;
-  refuseAgents(ctx, 'Removing a payment method');
+  await refuseAgents(ctx, 'Removing a payment method');
   const [exists] = await db.select().from(paymentMethods)
     .where(and(eq(paymentMethods.id, id), eq(paymentMethods.customerId, customerId)))
     .limit(1);
@@ -96,7 +96,7 @@ export async function setDefaultPaymentMethod(
   id: number,
 ): Promise<void> {
   const { customerId } = ctx;
-  refuseAgents(ctx, 'Changing the default payment method');
+  await refuseAgents(ctx, 'Changing the default payment method');
   const [exists] = await db.select().from(paymentMethods)
     .where(and(eq(paymentMethods.id, id), eq(paymentMethods.customerId, customerId)))
     .limit(1);

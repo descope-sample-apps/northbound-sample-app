@@ -1,4 +1,5 @@
 import { AgentForbiddenError } from './errors';
+import { record } from './audit';
 import type { ActorContext } from '@/lib/oauth/types';
 
 /**
@@ -17,8 +18,10 @@ import type { ActorContext } from '@/lib/oauth/types';
  * is complete and so the refusal is explicit rather than an omission — but no
  * tier ever grants it, and this check would refuse it even if one did.
  */
-export function refuseAgents(ctx: ActorContext, what: string): void {
+export async function refuseAgents(ctx: ActorContext, what: string): Promise<void> {
   if (ctx.actor === null) return;
+
+  await record(ctx, { action: 'agent_refused', summary: `${what}.` });
 
   throw new AgentForbiddenError(
     `${what} cannot be done by an agent. Northbound refuses this for every `

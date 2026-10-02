@@ -6,6 +6,7 @@ import type { ServiceTx } from './tx';
 import { formatCents } from '@/lib/money';
 import type { ActorContext } from '@/lib/oauth/types';
 import { StepUpRequiredError } from './errors';
+import { record } from './audit';
 
 /** Orders at or above this need a second approval naming that order. */
 export const STEP_UP_THRESHOLD_CENTS = 10_000;
@@ -101,7 +102,14 @@ export async function requireStepUpIfNeeded(
     ))
     .returning({ id: backchannelRequests.id });
 
-  if (consumed.length > 0) return;
+  if (consumed.length > 0) {
+    await record(ctx, {
+      action: 'step_up_approved',
+      summary: 'Approved this specific order.',
+      amountCents: subject.totalCents,
+    }, tx as never);
+    return;
+  }
 
   throw new StepUpRequiredError(
     overThreshold

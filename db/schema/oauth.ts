@@ -196,3 +196,41 @@ export const backchannelRequests = sqliteTable('backchannel_requests', {
 });
 
 export type BackchannelRequest = typeof backchannelRequests.$inferSelect;
+
+/**
+ * What happened, and who did it.
+ *
+ * Both identities on every row. That is the entire reason this table exists:
+ * under impersonation the log says "the customer did it" for everything, and a
+ * support team has no way to explain what happened or prevent the next one.
+ *
+ * `agentDisplayName` is denormalised because the log has to stay readable
+ * years later, after a platform has been renamed or its registration removed.
+ * What happened is a fact about the past.
+ */
+export const auditEvents = sqliteTable('audit_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  customerId: integer('customer_id').notNull().references(() => customers.id),
+
+  /** NULL when the customer did it themselves. */
+  agentId: text('agent_id'),
+  agentDisplayName: text('agent_display_name'),
+
+  action: text('action', {
+    enum: [
+      'grant_requested', 'grant_approved', 'grant_denied',
+      'order_placed', 'order_refused',
+      'step_up_requested', 'step_up_approved',
+      'agent_refused', 'access_revoked',
+    ],
+  }).notNull(),
+
+  /** One sentence, written when it happened, meant to be read by a person. */
+  summary: text('summary').notNull(),
+
+  orderNumber: integer('order_number'),
+  amountCents: integer('amount_cents'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+export type AuditEvent = typeof auditEvents.$inferSelect;

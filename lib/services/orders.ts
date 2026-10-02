@@ -10,9 +10,12 @@ import { calcTotals } from '@/lib/money';
 import { withWriteLock } from './writeLock';
 import { assertWithinPurchaseGrant } from './purchaseLimit';
 import { requireStepUpIfNeeded } from './stepUp';
+import { record } from './audit';
 import {
-  NotFoundError, OutOfStockError, OwnershipError, PriceChangedError, ValidationError,
+  NotFoundError, OutOfStockError, OwnershipError, PriceChangedError,
+  PurchaseLimitError, StepUpRequiredError, ValidationError,
 } from './errors';
+import { formatCents } from '@/lib/money';
 
 /** Seeded history runs 10225–10240, so the first order placed is 10241. */
 export const START_ORDER_NUMBER = 10_241;
@@ -48,6 +51,10 @@ export async function placeOrder(
   // Serialized by withWriteLock: SQLite permits one writer at a time, so two
   // unrelated checkouts contend for the lock even when they share no row, and a
   // contended transaction cannot be retried. See lib/services/writeLock.ts.
+  //
+  // A refusal is recorded OUTSIDE the transaction, below. Writing it inside
+  // would mean the rollback that accompanies the refusal also erased the record
+  // of it — and a refused order is exactly what someone looks for afterwards.
   return withWriteLock(() => db.transaction(async (tx) => {
     const [cart] = await tx.select().from(carts)
       .where(eq(carts.customerId, customerId)).limit(1);
@@ -174,8 +181,51 @@ export async function placeOrder(
 
     await tx.delete(cartItems).where(eq(cartItems.cartId, cart.id));
 
+    // Written inside the transaction, so the log and the order commit together.
+    // An audit row describing an order that never existed would be worse than
+    // no row at all.
+    await record(ctx, {
+      action: 'order_placed',
+      summary: `Order #${order.orderNumber} placed.`,
+      orderNumber: order.orderNumber,
+      amountCents: order.totalCents,
+    }, tx);
+
     return order;
-  }));
+  })).catch(async (error: unknown) => {
+    await recordRefusal(ctx, error);
+    throw error;
+  });
+}
+
+/**
+ * Logs a refused checkout, after the transaction has rolled back.
+ *
+ * Only the decisions worth explaining later: a cap exceeded, a step-up needed,
+ * a forbidden operation. An out-of-stock or a price change is a fact about the
+ * catalogue, not about an agent, and would only make the log harder to read.
+ */
+async function recordRefusal(ctx: ActorContext, error: unknown): Promise<void> {
+  if (error instanceof PurchaseLimitError) {
+    await record(ctx, {
+      action: 'order_refused',
+      summary: error.limitCents === null
+        ? 'This agent is not approved to buy anything.'
+        : `Over the ${formatCents(error.limitCents)} limit they approved.`,
+      amountCents: error.attemptedCents,
+    });
+    return;
+  }
+
+  if (error instanceof StepUpRequiredError) {
+    await record(ctx, {
+      action: 'step_up_requested',
+      summary: error.reason === 'amount'
+        ? 'Over the amount that needs a second approval.'
+        : 'Shipping somewhere never used before.',
+      amountCents: error.totalCents,
+    });
+  }
 }
 
 export async function listOrders(

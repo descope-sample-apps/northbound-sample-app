@@ -12,6 +12,7 @@ const SECTIONS = [
   ['/account/addresses', 'Saved addresses', 'Where your orders go.'],
   ['/account/payment-methods', 'Payment methods', 'Brand and last four digits only.'],
   ['/orders', 'Order history', 'Everything you have bought.'],
+  ['/account/activity', 'Account activity', 'What you did, and what agents did for you.'],
 ] as const;
 
 export default async function AccountPage() {
@@ -45,7 +46,7 @@ export default async function AccountPage() {
         </div>
       </section>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2">
         {SECTIONS.map(([href, title, blurb]) => (
           <Link
             key={href}
