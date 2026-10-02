@@ -26,6 +26,26 @@ export function AgentConnect({ platforms }: { platforms: PlatformButton[] }) {
           here until they approve it on their own device.
         </p>
 
+        {/*
+          Relayed to the customer so they can check the approval in front of
+          them is this one. Not a secret: knowing it authorises nothing. It is
+          here so a request the customer did not ask for shows a code nobody
+          told them.
+        */}
+        <div className="mt-6 rounded-[5px] border border-rule bg-paper p-5 text-center">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">
+            Tell the account holder this code
+          </div>
+          <div className="display mt-2 text-4xl tracking-[0.2em] tabular-nums">
+            {state.started.bindingCode}
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted">
+            Ask them to check it matches the code on the approval they received.
+            If it does not, the approval is for someone else&rsquo;s request and
+            they should decline it.
+          </p>
+        </div>
+
         <dl className="mt-6 space-y-2 border-t border-rule pt-5 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-muted">Agent</dt>

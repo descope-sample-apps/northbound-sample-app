@@ -14,24 +14,41 @@ import type {
  */
 export class LocalAuthorizationServer implements AuthorizationServer {
   metadata(issuer: string): AuthorizationServerMetadata {
+    // ADVERTISE ONLY WHAT EXISTS.
+    //
+    // An earlier version listed authorization_endpoint, token_endpoint,
+    // revocation_endpoint and introspection_endpoint under /oauth/*, none of
+    // which were built — so an agent following the discovery chain, which is
+    // precisely the behaviour this metadata exists to enable, would have walked
+    // into four 404s. Metadata that lies is worse than metadata that is sparse:
+    // a missing field makes a client choose another path, a wrong one makes it
+    // fail in a way it cannot diagnose.
+    //
+    // RFC 8414 lists authorization_endpoint as required only for grant types
+    // that use it. CIBA does not, so omitting it is correct rather than a gap.
     return {
       issuer,
-      authorization_endpoint: `${issuer}/oauth/authorize`,
-      token_endpoint: `${issuer}/oauth/token`,
       registration_endpoint: `${issuer}/oauth/register`,
-      revocation_endpoint: `${issuer}/oauth/revoke`,
-      introspection_endpoint: `${issuer}/oauth/introspect`,
       jwks_uri: `${issuer}/.well-known/jwks.json`,
+
+      // The backchannel pair. Northbound starts the request and the agent polls
+      // the same host, so these are Northbound's own endpoints rather than a
+      // separate authorization server's — which is what it means for Northbound
+      // to be the OAuth client in this flow.
+      backchannel_authentication_endpoint: `${issuer}/api/agent/authorize`,
+      backchannel_token_delivery_modes_supported: ['poll'],
+      token_endpoint: `${issuer}/api/agent/token`,
+
       scopes_supported: SCOPES,
-      response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code', 'refresh_token'],
-      // S256 only. `plain` is deliberately absent: a challenge that is its own
-      // verifier proves nothing about the client that began the flow.
-      code_challenge_methods_supported: ['S256'],
-      token_endpoint_auth_methods_supported: [
-        'none', 'client_secret_basic', 'client_secret_post',
-      ],
+      grant_types_supported: ['urn:openid:params:grant-type:ciba'],
+      token_endpoint_auth_methods_supported: ['none'],
       authorization_details_types_supported: ['purchase'],
+
+      // Northbound's own extensions, named so they are not mistaken for
+      // RFC 8414 fields. Signing is what earns a spending limit, and an agent
+      // should be able to discover that rather than having to read prose.
+      signed_request_methods_supported: ['web-bot-auth'],
+      agent_instructions_uri: `${issuer}/auth.md`,
     };
   }
 

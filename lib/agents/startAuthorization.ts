@@ -48,6 +48,7 @@ export async function startAgentAuthorization(params: {
     customerId: pending?.customerId ?? null,
     loginHint: params.loginHint,
     bindingMessage,
+    bindingCode: start.binding_code,
     issuer: params.issuer,
   });
 

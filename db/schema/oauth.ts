@@ -166,6 +166,22 @@ export const backchannelRequests = sqliteTable('backchannel_requests', {
   scope: text('scope').notNull(),
   /** The sentence the customer reads before approving. */
   bindingMessage: text('binding_message').notNull(),
+
+  /**
+   * A short code shown to BOTH sides, so the customer can check that the
+   * approval in front of them is the one their agent is waiting on.
+   *
+   * Not a secret and not a credential — knowing it authorises nothing. It
+   * exists because without it an attacker can trigger an approval for a known
+   * address and hope the customer taps Approve while distracted. With it, the
+   * customer has something concrete to compare, and a request they did not ask
+   * for shows a code nobody told them.
+   *
+   * Northbound's own addition; CIBA does not define one. The device
+   * authorization grant's `user_code` is the closest standard relative, though
+   * that one is typed IN rather than compared.
+   */
+  bindingCode: text('binding_code').notNull(),
   authorizationDetails: text('authorization_details'),
 
   /**

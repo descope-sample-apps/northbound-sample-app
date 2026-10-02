@@ -82,6 +82,7 @@ async function approveStepUp(fingerprint: string, customerId = ids.alice) {
     customerId,
     scope: 'checkout',
     bindingMessage: 'approve this order',
+    bindingCode: '1234',
     stepUpFingerprint: fingerprint,
     status: 'approved',
     pollIntervalSeconds: 5,

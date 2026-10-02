@@ -9,6 +9,7 @@ export type ConnectState = {
   started?: {
     authReqId: string;
     interval: number;
+    bindingCode: string;
     agentName: string;
     verified: boolean;
     tier: string;
@@ -53,6 +54,7 @@ export async function connectAgentAction(
     started: {
       authReqId: start.auth_req_id,
       interval: start.interval,
+      bindingCode: start.binding_code,
       agentName: identity.displayName,
       verified: identity.verified,
       tier: identity.tier,

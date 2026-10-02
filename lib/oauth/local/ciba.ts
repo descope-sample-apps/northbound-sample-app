@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { backchannelRequests, customers, type BackchannelRequest } from '@/db/schema';
@@ -13,6 +13,12 @@ export type BackchannelStart = {
   auth_req_id: string;
   expires_in: number;
   interval: number;
+  /**
+   * Relay this to the user. They check it against the code on the approval
+   * they received; a mismatch means the approval in front of them belongs to
+   * somebody else's request.
+   */
+  binding_code: string;
 };
 
 export type BackchannelPoll =
@@ -49,6 +55,9 @@ export async function startBackchannelAuthorization(params: {
   const { identity } = params;
   const now = new Date();
   const authReqId = randomBytes(24).toString('base64url');
+  // randomInt, not Math.random: this is shown to a person as a check against
+  // an approval they did not ask for, and a predictable code checks nothing.
+  const bindingCode = String(randomInt(1000, 10000));
   const normalizedHint = params.loginHint.trim().toLowerCase();
 
   // Resolved here, never echoed back. A null customer produces a row that can
@@ -78,6 +87,7 @@ export async function startBackchannelAuthorization(params: {
     scope: scopes.join(' '),
     bindingMessage: params.bindingMessage
       ?? bindingMessageFor(identity.tier, identity.displayName),
+    bindingCode,
     authorizationDetails: grant.length > 0 ? JSON.stringify(grant) : null,
     stepUpFingerprint: params.stepUpFingerprint ?? null,
     status: 'pending',
@@ -90,6 +100,7 @@ export async function startBackchannelAuthorization(params: {
     auth_req_id: authReqId,
     expires_in: CIBA_TTL_SECONDS,
     interval: CIBA_POLL_INTERVAL_SECONDS,
+    binding_code: bindingCode,
   };
 }
 
@@ -196,6 +207,7 @@ export function deliverApproval(params: {
   customerId: number | null;
   loginHint: string;
   bindingMessage: string;
+  bindingCode: string;
   issuer: string;
 }): void {
   if (params.customerId === null) return;
@@ -204,6 +216,7 @@ export function deliverApproval(params: {
   console.log(
     `\n[ciba] approval request for ${params.loginHint}\n`
     + `       ${params.bindingMessage}\n`
+    + `       Code: ${params.bindingCode}\n`
     + `       ${url}\n`,
   );
 }

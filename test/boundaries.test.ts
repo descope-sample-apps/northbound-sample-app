@@ -59,6 +59,8 @@ const MACHINE_SURFACES = [
   join('lib', 'agents'),       // agent identity resolution
   join('app', 'api'),          // the resource server and the authorize endpoint
   join('app', '.well-known'),  // discovery documents
+  join('app', 'auth.md'),      // prose instructions for agents
+  join('app', 'agents.md'),    // the same, under the other convention
 ];
 
 const OAUTH_DIRS = [...AGENT_FACING_PAGES, ...MACHINE_SURFACES];

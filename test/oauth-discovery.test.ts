@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { withTestDb, type TestDb } from './harness';
 
 let tdb: TestDb;
@@ -78,30 +79,57 @@ describe('authorization server metadata (RFC 8414)', () => {
     const body = await (await GET(req('https://shop.example/.well-known/oauth-authorization-server'))).json();
 
     expect(body.issuer).toBe('https://shop.example');
-    expect(body.authorization_endpoint).toBe('https://shop.example/oauth/authorize');
-    expect(body.token_endpoint).toBe('https://shop.example/oauth/token');
     expect(body.registration_endpoint).toBe('https://shop.example/oauth/register');
-    expect(body.revocation_endpoint).toBe('https://shop.example/oauth/revoke');
-    expect(body.introspection_endpoint).toBe('https://shop.example/oauth/introspect');
     expect(body.jwks_uri).toBe('https://shop.example/.well-known/jwks.json');
+    expect(body.backchannel_authentication_endpoint)
+      .toBe('https://shop.example/api/agent/authorize');
+    expect(body.token_endpoint).toBe('https://shop.example/api/agent/token');
+  });
+
+  /**
+   * Metadata that lies is worse than metadata that is sparse.
+   *
+   * An earlier version advertised four /oauth/* endpoints that were never
+   * built, so an agent doing exactly what discovery is for would have walked
+   * into 404s. Every advertised endpoint must resolve to a route file.
+   */
+  it('advertises no endpoint that does not exist', async () => {
+    const { GET } = await import('@/app/.well-known/oauth-authorization-server/route');
+    const body = await (await GET(req('https://shop.example/.well-known/oauth-authorization-server'))).json();
+
+    const routeFor = (url: string) =>
+      join('app', new URL(url).pathname.replace(/^\//, ''), 'route.ts');
+
+    const advertised = Object.entries(body)
+      .filter(([key, value]) =>
+        key.endsWith('_endpoint') && typeof value === 'string')
+      .map(([, value]) => value as string);
+
+    expect(advertised.length).toBeGreaterThan(0);
+    const missing = advertised.filter((url) => !existsSync(routeFor(url)));
+    expect(missing).toEqual([]);
   });
 
   // Advertising S256 while accepting plain would be worse than not advertising
   // PKCE at all: a client would believe it was protected when it was not.
-  it('offers S256 and never mentions plain', async () => {
-    const { GET } = await import('@/app/.well-known/oauth-authorization-server/route');
-    const res = await GET(req('https://shop.example/.well-known/oauth-authorization-server'));
-    const text = await res.text();
-
-    expect(JSON.parse(text).code_challenge_methods_supported).toEqual(['S256']);
-    expect(text).not.toContain('plain');
-  });
-
   it('advertises only the grants that actually work at this stage', async () => {
     const { GET } = await import('@/app/.well-known/oauth-authorization-server/route');
     const body = await (await GET(req('https://shop.example/.well-known/oauth-authorization-server'))).json();
-    expect(body.grant_types_supported).toEqual(['authorization_code', 'refresh_token']);
-    expect(body.response_types_supported).toEqual(['code']);
+
+    // CIBA only, until the authorization code endpoints are built. Claiming
+    // authorization_code while /oauth/authorize 404s would break exactly the
+    // client that trusted the metadata most.
+    expect(body.grant_types_supported).toEqual(['urn:openid:params:grant-type:ciba']);
+    expect(body.backchannel_token_delivery_modes_supported).toEqual(['poll']);
+    expect(body.authorization_endpoint).toBeUndefined();
+  });
+
+  it('points agents at the prose instructions and says signing is supported', async () => {
+    const { GET } = await import('@/app/.well-known/oauth-authorization-server/route');
+    const body = await (await GET(req('https://shop.example/.well-known/oauth-authorization-server'))).json();
+
+    expect(body.signed_request_methods_supported).toEqual(['web-bot-auth']);
+    expect(body.agent_instructions_uri).toBe('https://shop.example/auth.md');
   });
 
   it('advertises the purchase authorization_details type', async () => {

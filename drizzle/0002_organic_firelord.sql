@@ -1,0 +1,1 @@
+ALTER TABLE `backchannel_requests` ADD `binding_code` text NOT NULL;

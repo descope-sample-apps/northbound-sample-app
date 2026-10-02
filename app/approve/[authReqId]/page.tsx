@@ -50,6 +50,19 @@ export default async function ApprovePage({
         {request.bindingMessage}
       </h1>
 
+      {/* The customer's half of the check. Their agent should have told them
+          this number; if it did not, they are looking at somebody else's
+          request and should decline. */}
+      <div className="mt-6 flex items-center gap-4 rounded-[5px] border border-rule bg-surface px-5 py-4">
+        <div className="display text-3xl tracking-[0.2em] tabular-nums">
+          {request.bindingCode}
+        </div>
+        <p className="text-xs leading-relaxed text-muted">
+          Your agent should have shown you this code. If it did not, or it
+          showed a different one, decline this request.
+        </p>
+      </div>
+
       <div className="mt-8 rounded-lg border border-rule bg-surface p-7">
         <div className="flex items-baseline justify-between gap-4">
           <div>

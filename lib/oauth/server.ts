@@ -37,18 +37,24 @@ export interface AuthorizationServer {
 
 export type AuthorizationServerMetadata = {
   issuer: string;
-  authorization_endpoint: string;
-  token_endpoint: string;
   registration_endpoint: string;
-  revocation_endpoint: string;
-  introspection_endpoint: string;
   jwks_uri: string;
+  token_endpoint: string;
+  backchannel_authentication_endpoint: string;
+  backchannel_token_delivery_modes_supported: string[];
   scopes_supported: readonly string[];
-  response_types_supported: string[];
   grant_types_supported: string[];
-  code_challenge_methods_supported: string[];
   token_endpoint_auth_methods_supported: string[];
   authorization_details_types_supported: string[];
+  /** Northbound extensions, named so they are not mistaken for RFC 8414. */
+  signed_request_methods_supported?: string[];
+  agent_instructions_uri?: string;
+  /** Only present once the corresponding endpoints exist. */
+  authorization_endpoint?: string;
+  revocation_endpoint?: string;
+  introspection_endpoint?: string;
+  response_types_supported?: string[];
+  code_challenge_methods_supported?: string[];
 };
 
 export type ClientRegistrationRequest = {

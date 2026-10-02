@@ -29,22 +29,19 @@ function notImplemented(method: string, descopeApi: string): never {
 
 export class DescopeAuthorizationServer implements AuthorizationServer {
   metadata(issuer: string): AuthorizationServerMetadata {
-    // The one method that can answer honestly: a hosted AS publishes its own
-    // metadata, and a real implementation would proxy or redirect to it.
+    // A hosted authorization server publishes its own metadata; a real
+    // implementation would proxy or redirect to it rather than restate it here.
     const base = `https://api.descope.com/${process.env.DESCOPE_PROJECT_ID}`;
     return {
       issuer: base,
-      authorization_endpoint: `${base}/oauth2/v1/authorize`,
-      token_endpoint: `${base}/oauth2/v1/token`,
-      registration_endpoint: `${base}/oauth2/v1/register`,
-      revocation_endpoint: `${base}/oauth2/v1/revoke`,
-      introspection_endpoint: `${base}/oauth2/v1/introspect`,
+      registration_endpoint: `${base}/oauth2/v1/apps/register`,
       jwks_uri: `${base}/.well-known/jwks.json`,
+      backchannel_authentication_endpoint: `${base}/oauth2/v1/apps/bc-authorize`,
+      backchannel_token_delivery_modes_supported: ['poll'],
+      token_endpoint: `${base}/oauth2/v1/apps/token`,
       scopes_supported: SCOPES,
-      response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code', 'refresh_token'],
-      code_challenge_methods_supported: ['S256'],
-      token_endpoint_auth_methods_supported: ['none', 'client_secret_basic'],
+      grant_types_supported: ['urn:openid:params:grant-type:ciba'],
+      token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
       authorization_details_types_supported: ['purchase'],
     };
   }
