@@ -44,7 +44,7 @@ export async function startBackchannelAuthorization(params: {
   /** Overrides the tier's standing grant; used by step-up. */
   authorizationDetails?: AuthorizationDetail[];
   bindingMessage?: string;
-  stepUpForOrderId?: number;
+  stepUpFingerprint?: string;
 }): Promise<BackchannelStart> {
   const { identity } = params;
   const now = new Date();
@@ -79,7 +79,7 @@ export async function startBackchannelAuthorization(params: {
     bindingMessage: params.bindingMessage
       ?? bindingMessageFor(identity.tier, identity.displayName),
     authorizationDetails: grant.length > 0 ? JSON.stringify(grant) : null,
-    stepUpForOrderId: params.stepUpForOrderId ?? null,
+    stepUpFingerprint: params.stepUpFingerprint ?? null,
     status: 'pending',
     pollIntervalSeconds: CIBA_POLL_INTERVAL_SECONDS,
     createdAt: now,

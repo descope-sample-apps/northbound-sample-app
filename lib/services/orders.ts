@@ -9,6 +9,7 @@ import {
 import { calcTotals } from '@/lib/money';
 import { withWriteLock } from './writeLock';
 import { assertWithinPurchaseGrant } from './purchaseLimit';
+import { requireStepUpIfNeeded } from './stepUp';
 import {
   NotFoundError, OutOfStockError, OwnershipError, PriceChangedError, ValidationError,
 } from './errors';
@@ -102,9 +103,22 @@ export async function placeOrder(
       throw new PriceChangedError(input.expectedTotalCents, totals.totalCents);
     }
 
-    // The guardrail. Checked AFTER totals are known and BEFORE anything is
-    // written, so a refusal leaves the cart and the stock untouched.
+    // Both guards run AFTER totals are known and BEFORE anything is written,
+    // so a refusal leaves the cart and the stock untouched.
+    //
+    // Order matters: the cap first. "You may never spend this much" is a
+    // better answer than "approve this specific order" when the order is over
+    // the limit anyway — asking the customer to approve something that would
+    // be refused afterwards wastes their attention.
     await assertWithinPurchaseGrant(tx, ctx, totals.totalCents);
+
+    await requireStepUpIfNeeded(tx, ctx, {
+      totalCents: totals.totalCents,
+      addressId: address.id,
+      lines: lines.map(({ item }) => ({
+        productId: item.productId, quantity: item.quantity,
+      })),
+    });
 
     for (const { item, product } of lines) {
       // Relative UPDATE with a guard, not read-then-write. The guard is what

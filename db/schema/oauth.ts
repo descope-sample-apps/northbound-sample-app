@@ -168,8 +168,16 @@ export const backchannelRequests = sqliteTable('backchannel_requests', {
   bindingMessage: text('binding_message').notNull(),
   authorizationDetails: text('authorization_details'),
 
-  /** Set when this is a step-up for one specific order rather than a grant. */
-  stepUpForOrderId: integer('step_up_for_order_id'),
+  /**
+   * Set when this is a step-up for one specific order rather than a standing
+   * grant.
+   *
+   * A fingerprint rather than an order id, because the order does not exist
+   * yet — the whole point is that it cannot be placed until this is approved.
+   * It covers the customer, the agent, the exact total, the destination and
+   * the basket, so approving one order authorises that order and nothing else.
+   */
+  stepUpFingerprint: text('step_up_fingerprint'),
 
   /**
    * `consumed` is distinct from `expired` on purpose: one means the agent

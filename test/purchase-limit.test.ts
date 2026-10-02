@@ -17,6 +17,26 @@ beforeEach(async () => {
   tdb = await withTestDb();
   ids = await seedMinimal(tdb);
   (globalThis as { __testDb?: unknown }).__testDb = tdb.db;
+
+  // These tests are about the spending CAP. Step-up is a separate guard with
+  // its own file, and it fires on a never-used delivery address — so seed one
+  // prior order to Alice's address, and keep every amount below the $100
+  // step-up threshold, so only the cap is under test here.
+  const [address] = await tdb.db.select().from(schema.addresses)
+    .where(eq(schema.addresses.customerId, ids.alice));
+  const [card] = await tdb.db.select().from(schema.paymentMethods)
+    .where(eq(schema.paymentMethods.customerId, ids.alice));
+
+  await tdb.db.insert(schema.orders).values({
+    orderNumber: 9001,
+    customerId: ids.alice,
+    status: 'delivered',
+    placedAt: new Date(Date.now() - 90 * 86_400_000),
+    subtotalCents: 1_000, taxCents: 85, shippingCents: 895, totalCents: 1_980,
+    shippingAddressId: address.id,
+    paymentMethodId: card.id,
+    agentId: null,
+  });
 });
 
 afterEach(async () => { await tdb.close(); });
@@ -74,17 +94,39 @@ describe('a customer buying for themselves', () => {
 });
 
 describe('an agent with a $200 cap', () => {
-  it('places a $140 order', async () => {
+  it('places a $90 order', async () => {
     const { placeOrder } = await import('@/lib/services/orders');
     const ctx = agentContext();
-    await fillCart(ctx, 14_000);
+    await fillCart(ctx, 9_000);
 
     const order = await placeOrder(ctx, await defaultsFor(ids.alice));
     expect(order.totalCents).toBeLessThanOrEqual(20_000);
     expect(order.agentId).toBe('agent_shopping_assistant');
   });
 
-  it('is refused a $260 order, with something it can relay', async () => {
+  /**
+   * Worth being explicit about, because the two guards interact.
+   *
+   * A $140 order is UNDER the $200 cap and OVER the $100 step-up threshold. It
+   * is permitted by the grant and still needs the customer to approve that
+   * specific order — which is the combination the blog's walkthrough describes,
+   * where "$140 goes through" means the cap allows it, not that nothing else is
+   * asked.
+   */
+  it('still asks for a step-up on a $140 order the cap allows', async () => {
+    const { placeOrder } = await import('@/lib/services/orders');
+    const { StepUpRequiredError } = await import('@/lib/services/errors');
+    const ctx = agentContext();
+    await fillCart(ctx, 14_000);
+
+    await expect(placeOrder(ctx, await defaultsFor(ids.alice)))
+      .rejects.toBeInstanceOf(StepUpRequiredError);
+  });
+
+  // The cap is checked BEFORE step-up: telling the customer "you may never
+  // spend this much" beats asking them to approve something that would be
+  // refused immediately afterwards.
+  it('is refused a $260 order outright, with something it can relay', async () => {
     const { placeOrder } = await import('@/lib/services/orders');
     const { PurchaseLimitError } = await import('@/lib/services/errors');
     const ctx = agentContext();
@@ -107,7 +149,11 @@ describe('an agent with a $200 cap', () => {
     await placeOrder(ctx, await defaultsFor(ids.alice)).catch(() => {});
 
     expect((await getCart(ctx)).items).toHaveLength(1);
-    expect(await tdb.db.select().from(schema.orders)).toHaveLength(0);
+
+    // The fixture seeds one historical order placed by the customer; what must
+    // not exist is an order placed by the agent.
+    const placed = await tdb.db.select().from(schema.orders);
+    expect(placed.filter((o) => o.agentId !== null)).toHaveLength(0);
   });
 });
 
@@ -129,7 +175,8 @@ describe('the period window', () => {
     await fillCart(ctx, 9_000);
     await placeOrder(ctx, defaults);
 
-    // Two orders of about $90 have used most of the $200.
+    // Two orders of about $90 have used most of the $200. Each is under the
+    // step-up threshold, so only the cap decides.
     await fillCart(ctx, 9_000);
     await expect(placeOrder(ctx, defaults)).rejects.toBeInstanceOf(PurchaseLimitError);
   });
@@ -139,7 +186,7 @@ describe('the period window', () => {
     const ctx = agentContext();
     const defaults = await defaultsFor(ids.alice);
 
-    await fillCart(ctx, 18_000);
+    await fillCart(ctx, 9_000);
     const old = await placeOrder(ctx, defaults);
 
     // Eight days ago — outside a P7D window.
@@ -147,7 +194,7 @@ describe('the period window', () => {
       .set({ placedAt: new Date(Date.now() - 8 * 86_400_000) })
       .where(eq(schema.orders.id, old.id));
 
-    await fillCart(ctx, 18_000);
+    await fillCart(ctx, 9_000);
     await expect(placeOrder(ctx, defaults)).resolves.toBeTruthy();
   });
 
@@ -161,7 +208,7 @@ describe('the period window', () => {
     await placeOrder(human, defaults);
 
     const ctx = agentContext();
-    await fillCart(ctx, 14_000);
+    await fillCart(ctx, 9_000);
     await expect(placeOrder(ctx, defaults)).resolves.toBeTruthy();
   });
 
@@ -170,11 +217,11 @@ describe('the period window', () => {
     const defaults = await defaultsFor(ids.alice);
 
     const other = agentContext({ agentId: 'agent_pantry_bot' });
-    await fillCart(other, 18_000);
+    await fillCart(other, 9_000);
     await placeOrder(other, defaults);
 
     const mine = agentContext({ agentId: 'agent_shopping_assistant' });
-    await fillCart(mine, 18_000);
+    await fillCart(mine, 9_000);
     await expect(placeOrder(mine, defaults)).resolves.toBeTruthy();
   });
 });
@@ -206,7 +253,7 @@ describe('the cap comes from the token and nowhere else', () => {
       const ctx = agentContext();
       ctx.authorizationDetails = [cap('50.00'), cap('5000.00')];
 
-      await fillCart(ctx, 10_000);
+      await fillCart(ctx, 9_000);
       await expect(placeOrder(ctx, await defaultsFor(ids.alice)))
         .rejects.toBeInstanceOf(PurchaseLimitError);
     });

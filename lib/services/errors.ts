@@ -112,3 +112,24 @@ export class PurchaseLimitError extends ServiceError {
 export class AgentForbiddenError extends ServiceError {
   readonly code = 'agent_forbidden';
 }
+
+/**
+ * This order needs a second, order-specific approval before it can be placed.
+ *
+ * Distinct from PurchaseLimitError. That one means "more than you were ever
+ * allowed"; this means "allowed, but not without asking again about this one".
+ * The agent's correct response is to start a step-up and wait, not to give up —
+ * which is why the fingerprint travels with the error.
+ */
+export class StepUpRequiredError extends ServiceError {
+  readonly code = 'step_up_required';
+
+  constructor(
+    message: string,
+    readonly fingerprint: string,
+    readonly totalCents: number,
+    readonly reason: 'amount' | 'new_address',
+  ) {
+    super(message);
+  }
+}

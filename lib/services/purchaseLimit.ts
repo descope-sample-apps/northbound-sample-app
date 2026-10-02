@@ -6,9 +6,7 @@ import {
 } from '@/lib/oauth/types';
 import { PurchaseLimitError, ValidationError } from './errors';
 
-type Tx = {
-  select: typeof import('@/db/client').db.select;
-};
+import type { ServiceTx } from './tx';
 
 /**
  * Enforces the spending cap the customer approved.
@@ -28,7 +26,7 @@ type Tx = {
  * their own device, and anything else would let the agent choose its own cap.
  */
 export async function assertWithinPurchaseGrant(
-  tx: Tx,
+  tx: ServiceTx,
   ctx: ActorContext,
   totalCents: number,
 ): Promise<void> {
