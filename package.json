@@ -1,0 +1,49 @@
+{
+  "name": "northbound",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Northbound — an outdoor gear retailer. Sub-project A of a B2C agent-authorization reference implementation.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx db/migrate.ts",
+    "db:seed": "tsx db/seed/index.ts",
+    "db:setup": "pnpm db:migrate && pnpm db:seed",
+    "images:fetch": "tsx scripts/fetch-images.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.15",
+    "drizzle-orm": "^0.44.7",
+    "jose": "^6.2.12",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.6",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4",
+    "tsx": "^4.20.7",
+    "typescript": "^5",
+    "vitest": "^4.0.18"
+  },
+  "packageManager": "pnpm@10.15.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp"
+    ]
+  }
+}
