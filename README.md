@@ -70,7 +70,7 @@ the approval message. The check is per order; the 7-day `period` isn't tracked y
    ```
 2. Set `DESCOPE_DISCOVERY_URL` in `.env.local` to the inbound app's Discovery
    URL, then `pnpm dev` (port 3000).
-3. Start the [demo front door](https://github.com/descope/agent-ready/tree/main/demo/front-door)
+3. Start the [agent-ready front door](https://github.com/descope/agent-ready/tree/main/front-door)
    on port 8788, with `COOKIE_DOMAIN` unset.
 4. Start the Worker in front of Northbound:
 
