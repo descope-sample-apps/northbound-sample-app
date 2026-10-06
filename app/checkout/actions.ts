@@ -2,17 +2,37 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { requireCustomer } from '@/lib/auth/session-cookie';
+import { getAgentSession, requireCustomer } from '@/lib/auth/session-cookie';
+import { getCart } from '@/lib/services/cart';
 import { placeOrder } from '@/lib/services/orders';
 import { PriceChangedError, ServiceError } from '@/lib/services/errors';
 
 export type CheckoutState = { error?: string };
+
+const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 export async function placeOrderAction(
   _previous: CheckoutState,
   formData: FormData,
 ): Promise<CheckoutState> {
   const customer = await requireCustomer();
+
+  // An agent may only spend what the customer approved for it. Checked against the cart's
+  // real total, not the one the form sends.
+  const agentSession = await getAgentSession();
+  if (agentSession) {
+    const limit = agentSession.purchaseLimitCents;
+    if (limit === null) {
+      return { error: "This AI agent isn't allowed to place orders. Ask the customer to place this order themselves." };
+    }
+    const { totalCents } = await getCart(customer.id);
+    if (totalCents > limit) {
+      return {
+        error: `This order (${dollars(totalCents)}) is over the ${dollars(limit)} limit the customer approved for this AI agent. `
+          + 'Ask the customer to place it themselves or approve a higher limit.',
+      };
+    }
+  }
 
   let orderNumber: number;
 
