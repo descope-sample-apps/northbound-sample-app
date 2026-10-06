@@ -79,6 +79,12 @@ describe('resolving a Descope agent token', () => {
     expect(session?.agent).toEqual({ clientId: 'client-unverified', actor: { sub: 'agt_abc' }, agentId: 'agt_abc' });
   });
 
+  it('takes the agent ID from act.sub when present', async () => {
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+    const session = await resolveAgentToken(await token({ act: { sub: 'agt_from_act' }, agent_id: undefined }));
+    expect(session?.agent.agentId).toBe('agt_from_act');
+  });
+
   it('falls back to userinfo when the token has no email', async () => {
     const { resolveAgentToken } = await import('@/lib/agentSession/descope');
     userinfoEmail = 'ALICE@example.com';

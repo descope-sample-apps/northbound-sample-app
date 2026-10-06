@@ -23,7 +23,7 @@ export type AgentIdentity = {
   clientId: string | null;
   /** The token's act claim, when Descope includes one. */
   actor: unknown;
-  /** The front door's per-request agent ID, when Descope includes it as a claim. */
+  /** Which agent is acting: act.sub (RFC 8693), or an agent_id claim if Descope sets one instead. */
   agentId: string | null;
 };
 
@@ -57,6 +57,11 @@ async function emailFor(token: string, payload: JWTPayload, userinfoEndpoint?: s
   return typeof info.email === 'string' ? info.email : null;
 }
 
+function actorSubject(act: unknown): string | null {
+  const sub = (act as { sub?: unknown } | null | undefined)?.sub;
+  return typeof sub === 'string' ? sub : null;
+}
+
 /**
  * Fails closed: an unconfigured project, a bad signature, the wrong issuer or audience,
  * an expired token, or no matching customer all resolve to null.
@@ -87,7 +92,7 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
         clientId: typeof payload.azp === 'string' ? payload.azp
           : typeof payload.client_id === 'string' ? payload.client_id : null,
         actor: payload.act ?? null,
-        agentId: typeof payload.agent_id === 'string' ? payload.agent_id : null,
+        agentId: actorSubject(payload.act) ?? (typeof payload.agent_id === 'string' ? payload.agent_id : null),
       },
     };
   } catch (error) {
