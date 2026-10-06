@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getCurrentCustomer } from '@/lib/auth/session-cookie';
+import { getAgentSession, getCurrentCustomer } from '@/lib/auth/session-cookie';
 import { getCart } from '@/lib/services/cart';
 import { logoutAction } from '@/app/login/actions';
 
@@ -20,6 +20,7 @@ const linkClass =
  */
 export async function Nav() {
   const customer = await getCurrentCustomer();
+  const agent = await getAgentSession();
   const cart = customer ? await getCart(customer.id) : null;
   const itemCount = cart?.items.reduce((total, line) => total + line.quantity, 0) ?? 0;
 
@@ -42,6 +43,12 @@ export async function Nav() {
         >
           Cart ({itemCount})
         </Link>
+
+        {agent && (
+          <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.11em] text-spruce">
+            Agent for {agent.customer.name}
+          </span>
+        )}
 
         {customer ? (
           <form action={logoutAction}>

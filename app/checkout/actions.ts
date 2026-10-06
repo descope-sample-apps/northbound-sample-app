@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { placeOrder } from '@/lib/services/orders';
 import { PriceChangedError, ServiceError } from '@/lib/services/errors';
+import { recordAgentWrite } from '@/lib/agentSession/guard';
 
 export type CheckoutState = { error?: string };
 
@@ -26,6 +27,7 @@ export async function placeOrderAction(
       expectedTotalCents: Number(formData.get('expectedTotalCents')),
     });
     orderNumber = order.orderNumber;
+    await recordAgentWrite('agent_order_placed', { order_number: orderNumber });
   } catch (error) {
     if (error instanceof PriceChangedError) {
       revalidatePath('/checkout');

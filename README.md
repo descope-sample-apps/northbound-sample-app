@@ -30,6 +30,51 @@ Optional: `cp .env.example .env.local`. Every value has a working default.
 
 ---
 
+## AI agents, through agent-ready
+
+This branch grafts agent access onto the storefront without an API, an
+authorization server, or an agent page of its own. Those live outside the app,
+in [agent-ready](https://github.com/descope/agent-ready):
+
+- The **edge integration** (a Cloudflare Worker) sits in front of Northbound. It
+  verifies agents, serves the discovery files, and sends agents on `/login` to
+  the front door.
+- The **front door** asks the customer to approve the agent through a Descope
+  CIBA request, then sets the Descope access token as a `DS` cookie in the
+  agent's browser.
+
+Northbound's whole change is [`lib/agentSession/`](lib/agentSession/) plus four
+call sites, and a boundary test keeps it that way:
+
+- A valid Descope token in the `DS` cookie signs the agent in as the customer
+  with the same email. A customer's own session always wins.
+- Agents can't add, remove, or change payment methods.
+- Orders an agent places are logged with the agent's client and ID.
+- The nav shows "Agent for <name>" so a demo audience can see who is acting.
+
+### Run it with agent-ready
+
+1. In Descope, create users with the seeded emails (`alice@example.com` and so
+   on), and an inbound app with CIBA turned on.
+2. Set `DESCOPE_DISCOVERY_URL` in `.env.local` to the inbound app's Discovery
+   URL, then `pnpm dev` (port 3000).
+3. Start the [demo front door](https://github.com/descope/agent-ready/tree/main/demo/front-door)
+   on port 8788, with `COOKIE_DOMAIN` unset.
+4. Start the edge integration in front of Northbound:
+
+   ```bash
+   cd agent-ready/cloudflare
+   npx wrangler dev --var UPSTREAM_ORIGIN:http://localhost:3000 --var MODE:route \
+     --var FRONT_DOOR_URL:http://localhost:8788 --var LOGIN_PATHS:/login \
+     --var SITE_NAME:Northbound --var HINT_SIGNING_SECRET:<same as the front door>
+   ```
+
+5. Browse to `http://localhost:8787` as the agent. Cookies ignore ports, so the
+   front door's cookie on `localhost:8788` reaches Northbound through the edge
+   on `localhost:8787`.
+
+---
+
 ## Seeded accounts
 
 | Email | Password | What it demonstrates |

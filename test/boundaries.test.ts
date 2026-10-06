@@ -30,6 +30,33 @@ const STOREFRONT_DIRS = ['app', 'lib', 'components'];
 /** The one module the spec permits to reach the legacy credential store. */
 const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
 
+/**
+ * THE GRAFT. Agent access arrives through the agent-ready edge integration and
+ * front door, which hand the agent's browser a Descope token in a cookie. All of
+ * Northbound's agent code lives in this one directory.
+ */
+const AGENT_DIR = join('lib', 'agentSession');
+
+/**
+ * The only storefront files that import the agent code. Adding one should be a decision, not an
+ * accident. (The nav shows an agent badge through session-cookie.ts, so it isn't listed.)
+ */
+const AGENT_AWARE_FILES = [
+  join('app', 'account', 'actions.ts'),
+  join('app', 'checkout', 'actions.ts'),
+  join('lib', 'auth', 'session-cookie.ts'),
+].sort();
+
+describe('the agent-ready graft stays contained', () => {
+  it('is referenced only from the files listed in AGENT_AWARE_FILES', () => {
+    const users = STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))
+      .filter((file) => !file.startsWith(AGENT_DIR))
+      .filter((file) => /@\/lib\/agentSession\//.test(readFileSync(file, 'utf8')))
+      .sort();
+    expect(users).toEqual(AGENT_AWARE_FILES);
+  });
+});
+
 describe('sub-project A contains no agent concepts', () => {
   // The thesis of this project is that agent access is GRAFTED ONTO a retailer
   // that already exists. If the storefront ships with agent scaffolding baked
@@ -41,6 +68,7 @@ describe('sub-project A contains no agent concepts', () => {
 
     for (const file of STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))) {
       if (file === LEGACY_ROUTE) continue;
+      if (file.startsWith(AGENT_DIR)) continue;
 
       const code = stripComments(readFileSync(file, 'utf8'));
       const matches = code.match(
