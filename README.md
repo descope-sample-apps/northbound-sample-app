@@ -32,45 +32,45 @@ Optional: `cp .env.example .env.local`. Every value has a working default.
 
 ## AI agents, through agent-ready
 
-This branch grafts agent access onto the storefront without an API, an
-authorization server, or an agent page of its own. Those live outside the app,
-in [agent-ready](https://github.com/descope/agent-ready):
+This branch lets customers' AI agents shop for them, and the store itself barely
+changes. A Cloudflare Worker from [agent-ready](https://github.com/descope/agent-ready)
+sits in front of it and does nearly everything:
 
-- The **edge integration** (a Cloudflare Worker) sits in front of Northbound. It
-  verifies agents, serves the discovery files, and sends agents on `/login` to
-  the front door.
-- The **front door** asks the customer to approve the agent through a Descope
-  CIBA request, then sets the Descope access token as a `DS` cookie in the
-  agent's browser.
+- **Recognizes agents**, by Web Bot Auth signature, user agent, or the session cookie below.
+- **Serves the discovery files** agents look for: `/.well-known/oauth-protected-resource`, `/auth.md` and `/agents`.
+- **Shows agents the way in.** It adds a note for agents to `/login`, and sends recognized agents there to the front door.
+- **Blocks agents from payment methods** (`BLOCKED_AGENT_PATHS = "/account/payment-methods*"`).
+- **Logs every agent request** with the agent's identity.
 
-Northbound's whole change is [`lib/agentSession/`](lib/agentSession/) plus four
-call sites, and a boundary test keeps it that way:
+The agent-ready front door asks the customer to approve the agent through Descope
+CIBA, then puts the Descope access token in a `DS` cookie in the agent's browser.
 
-- A valid Descope token in the `DS` cookie signs the agent in as the customer
-  with the same email. A customer's own session always wins.
-- Agents can't add, remove, or change payment methods.
-- Orders an agent places are logged with the agent's client and ID.
-- The nav shows "Agent for <name>" so a demo audience can see who is acting.
+**Northbound's only change is accepting that token:**
+[`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks it against the
+Descope inbound app, and [`lib/auth/session-cookie.ts`](lib/auth/session-cookie.ts)
+uses it to sign the agent in as the customer with the same email. A customer's
+own session always wins. The boundary test keeps agent code confined to those two files.
 
-### Run it with agent-ready
+### Run it
 
 1. In Descope, create users with the seeded emails (`alice@example.com` and so
-   on), and an inbound app with CIBA turned on.
+   on), and an inbound app with CIBA turned on whose tokens include `email` and `act`.
 2. Set `DESCOPE_DISCOVERY_URL` in `.env.local` to the inbound app's Discovery
    URL, then `pnpm dev` (port 3000).
 3. Start the [demo front door](https://github.com/descope/agent-ready/tree/main/demo/front-door)
    on port 8788, with `COOKIE_DOMAIN` unset.
-4. Start the edge integration in front of Northbound:
+4. Start the Worker in front of Northbound:
 
    ```bash
    cd agent-ready/cloudflare
    npx wrangler dev --var UPSTREAM_ORIGIN:http://localhost:3000 --var MODE:route \
      --var FRONT_DOOR_URL:http://localhost:8788 --var LOGIN_PATHS:/login \
-     --var SITE_NAME:Northbound --var HINT_SIGNING_SECRET:<same as the front door>
+     --var BLOCKED_AGENT_PATHS:"/account/payment-methods*" --var SITE_NAME:Northbound \
+     --var HINT_SIGNING_SECRET:<same as the front door>
    ```
 
 5. Browse to `http://localhost:8787` as the agent. Cookies ignore ports, so the
-   front door's cookie on `localhost:8788` reaches Northbound through the edge
+   front door's cookie on `localhost:8788` reaches Northbound through the Worker
    on `localhost:8787`.
 
 ---

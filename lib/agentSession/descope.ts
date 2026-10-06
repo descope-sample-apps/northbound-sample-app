@@ -1,100 +1,63 @@
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { customers, type Customer } from '@/db/schema';
 
 /**
- * THE GRAFT. Everything Northbound knows about AI agents lives in this directory.
+ * THE GRAFT: Northbound's only agent code.
  *
- * Agents don't sign in here. They connect through the agent-ready front door,
- * which runs a Descope CIBA request, the customer approves on their own device,
- * and the front door sets the resulting Descope access token as a cookie in the
- * agent's browser. This module turns that cookie into a customer, plus a record
- * of which agent is acting for them.
+ * A Cloudflare Worker from agent-ready sits in front of the store and does the rest:
+ * it verifies agents, serves the discovery files, sends agents on /login to the front
+ * door, and blocks agents from payment methods. The front door gets the customer's
+ * approval with Descope CIBA and puts the Descope access token in a DS cookie in the
+ * agent's browser. This file decides whether to trust that token.
  *
- * It is a separate resolver on purpose, as lib/auth/session.ts asked for: the
- * opaque human session and the agent's signed token never share a code path.
- *
- * No Next.js imports, so it runs in plain Node tests.
+ * It's a separate resolver, as lib/auth/session.ts asks: the opaque human session and
+ * the agent's signed token never share a code path. No Next.js imports, so tests run in Node.
  */
 
-export type AgentIdentity = {
-  /** The inbound app the token was issued to (azp). Names the platform only for trusted platforms. */
-  clientId: string | null;
-  /** The token's act claim, when Descope includes one. */
-  actor: unknown;
-  /** Which agent is acting: act.sub (RFC 8693), or an agent_id claim if Descope sets one instead. */
-  agentId: string | null;
+export type AgentSession = {
+  customer: Customer;
+  /** Which agent is acting for the customer: the token's act.sub. */
+  agent: string;
 };
 
-export type AgentSession = { customer: Customer; agent: AgentIdentity };
+let keys: { url: string; issuer: string; jwks: ReturnType<typeof createRemoteJWKSet> } | undefined;
 
-type Discovery = { issuer: string; jwks_uri: string; userinfo_endpoint?: string };
-
-let discovery: { url: string; value: Discovery; jwks: ReturnType<typeof createRemoteJWKSet> } | undefined;
-
-async function loadDiscovery(url: string) {
-  if (discovery?.url === url) return discovery;
-  const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`Descope discovery failed (${response.status})`);
-  const value = (await response.json()) as Discovery;
-  discovery = { url, value, jwks: createRemoteJWKSet(new URL(value.jwks_uri)) };
-  return discovery;
+async function descopeKeys(discoveryUrl: string) {
+  if (keys?.url !== discoveryUrl) {
+    const response = await fetch(discoveryUrl, { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error(`Descope discovery failed (${response.status})`);
+    const discovery = (await response.json()) as { issuer: string; jwks_uri: string };
+    keys = { url: discoveryUrl, issuer: discovery.issuer, jwks: createRemoteJWKSet(new URL(discovery.jwks_uri)) };
+  }
+  return keys;
 }
 
 /** Test hook. */
 export function resetAgentSessionCache(): void {
-  discovery = undefined;
-}
-
-/** Descope access tokens may leave the email out; userinfo has it when the customer consented. */
-async function emailFor(token: string, payload: JWTPayload, userinfoEndpoint?: string): Promise<string | null> {
-  if (typeof payload.email === 'string') return payload.email;
-  if (!userinfoEndpoint) return null;
-  const response = await fetch(userinfoEndpoint, { headers: { authorization: `Bearer ${token}` } });
-  if (!response.ok) return null;
-  const info = (await response.json()) as { email?: unknown };
-  return typeof info.email === 'string' ? info.email : null;
-}
-
-function actorSubject(act: unknown): string | null {
-  const sub = (act as { sub?: unknown } | null | undefined)?.sub;
-  return typeof sub === 'string' ? sub : null;
+  keys = undefined;
 }
 
 /**
- * Fails closed: an unconfigured project, a bad signature, the wrong issuer or audience,
- * an expired token, or no matching customer all resolve to null.
+ * Fails closed: no DESCOPE_DISCOVERY_URL, a bad signature, the wrong issuer or audience,
+ * an expired token, a missing email or act claim, or no matching customer all resolve to null.
  */
 export async function resolveAgentToken(token: string): Promise<AgentSession | null> {
   const discoveryUrl = process.env.DESCOPE_DISCOVERY_URL;
   if (!token || !discoveryUrl) return null;
 
   try {
-    const { value, jwks } = await loadDiscovery(discoveryUrl);
-    const { payload } = await jwtVerify(token, jwks, {
-      issuer: value.issuer,
-      audience: process.env.DESCOPE_AUDIENCE || undefined,
-    });
-
-    const email = await emailFor(token, payload, value.userinfo_endpoint);
-    if (!email) return null;
+    const { issuer, jwks } = await descopeKeys(discoveryUrl);
+    const { payload } = await jwtVerify(token, jwks, { issuer, audience: process.env.DESCOPE_AUDIENCE || undefined });
+    const agent = (payload.act as { sub?: unknown } | undefined)?.sub;
+    if (typeof payload.email !== 'string' || typeof agent !== 'string') return null;
 
     // Descope's user and Northbound's customer are the same person when their emails match.
     const [customer] = await db.select().from(customers)
-      .where(sql`lower(${customers.email}) = ${email.toLowerCase()}`)
+      .where(sql`lower(${customers.email}) = ${payload.email.toLowerCase()}`)
       .limit(1);
-    if (!customer) return null;
-
-    return {
-      customer,
-      agent: {
-        clientId: typeof payload.azp === 'string' ? payload.azp
-          : typeof payload.client_id === 'string' ? payload.client_id : null,
-        actor: payload.act ?? null,
-        agentId: actorSubject(payload.act) ?? (typeof payload.agent_id === 'string' ? payload.agent_id : null),
-      },
-    };
+    return customer ? { customer, agent } : null;
   } catch (error) {
     console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));
     return null;

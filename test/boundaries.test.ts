@@ -31,21 +31,15 @@ const STOREFRONT_DIRS = ['app', 'lib', 'components'];
 const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
 
 /**
- * THE GRAFT. Agent access arrives through the agent-ready edge integration and
- * front door, which hand the agent's browser a Descope token in a cookie. All of
- * Northbound's agent code lives in this one directory.
+ * THE GRAFT. Agent access arrives through agent-ready's Cloudflare Worker and front
+ * door, which hand the agent's browser a Descope token in a cookie. Everything else
+ * an agent needs happens at the edge, so all of Northbound's agent code is token
+ * validation, and it lives in this one directory.
  */
 const AGENT_DIR = join('lib', 'agentSession');
 
-/**
- * The only storefront files that import the agent code. Adding one should be a decision, not an
- * accident. (The nav shows an agent badge through session-cookie.ts, so it isn't listed.)
- */
-const AGENT_AWARE_FILES = [
-  join('app', 'account', 'actions.ts'),
-  join('app', 'checkout', 'actions.ts'),
-  join('lib', 'auth', 'session-cookie.ts'),
-].sort();
+/** The only storefront file that imports the agent code: the session lookup. */
+const AGENT_AWARE_FILES = [join('lib', 'auth', 'session-cookie.ts')];
 
 describe('the agent-ready graft stays contained', () => {
   it('is referenced only from the files listed in AGENT_AWARE_FILES', () => {

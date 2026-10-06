@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { ServiceError } from '@/lib/services/errors';
-import { refuseAgent } from '@/lib/agentSession/guard';
 import { updateProfile } from '@/lib/services/profile';
 import {
   deleteAddress, setDefaultAddress, upsertAddress,
@@ -99,8 +98,6 @@ export async function addPaymentMethodAction(
   _previous: AccountState,
   formData: FormData,
 ): Promise<AccountState> {
-  const refused = await refuseAgent('change payment methods');
-  if (refused) return refused;
   return run(
     (customerId) => addPaymentMethod(customerId, {
       brand: asString(formData.get('brand')) as 'visa' | 'mastercard' | 'amex',
@@ -118,8 +115,6 @@ export async function deletePaymentMethodAction(
   _previous: AccountState,
   formData: FormData,
 ): Promise<AccountState> {
-  const refused = await refuseAgent('change payment methods');
-  if (refused) return refused;
   return run(
     (customerId) => deletePaymentMethod(customerId, asNumber(formData.get('id'))),
     ['/account/payment-methods', '/checkout'],
@@ -130,8 +125,6 @@ export async function setDefaultPaymentMethodAction(
   _previous: AccountState,
   formData: FormData,
 ): Promise<AccountState> {
-  const refused = await refuseAgent('change payment methods');
-  if (refused) return refused;
   return run(
     (customerId) => setDefaultPaymentMethod(customerId, asNumber(formData.get('id'))),
     ['/account/payment-methods', '/checkout'],

@@ -23,11 +23,9 @@ vi.mock('next/navigation', () => ({ redirect: (to: string) => { throw new Error(
 const DISCOVERY = 'https://api.descope.test/v1/apps/P1/.well-known/openid-configuration';
 const ISSUER = 'https://api.descope.test/v1/apps/P1';
 const JWKS = 'https://api.descope.test/P1/.well-known/jwks.json';
-const USERINFO = 'https://api.descope.test/oauth2/v1/apps/userinfo';
 
 let signingKey: JoseKey;
 let otherKey: JoseKey;
-let userinfoEmail: string | undefined;
 const realFetch = globalThis.fetch;
 
 beforeEach(async () => {
@@ -35,7 +33,6 @@ beforeEach(async () => {
   await seedMinimal(tdb);
   (globalThis as { __testDb?: unknown }).__testDb = tdb.db;
   jar = new Map();
-  userinfoEmail = undefined;
   process.env.DESCOPE_DISCOVERY_URL = DISCOVERY;
 
   const pair = await generateKeyPair('RS256');
@@ -45,9 +42,8 @@ beforeEach(async () => {
 
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url === DISCOVERY) return Response.json({ issuer: ISSUER, jwks_uri: JWKS, userinfo_endpoint: USERINFO });
+    if (url === DISCOVERY) return Response.json({ issuer: ISSUER, jwks_uri: JWKS });
     if (url === JWKS) return Response.json({ keys: [publicJwk] });
-    if (url === USERINFO) return userinfoEmail ? Response.json({ email: userinfoEmail }) : new Response(null, { status: 401 });
     return new Response(null, { status: 404 });
   }) as typeof fetch;
 
@@ -62,7 +58,7 @@ afterEach(async () => {
 });
 
 function token(claims: Record<string, unknown> = {}, opts: { key?: JoseKey; issuer?: string; exp?: string | number } = {}) {
-  return new SignJWT({ email: 'alice@example.com', azp: 'client-unverified', agent_id: 'agt_abc', ...claims })
+  return new SignJWT({ email: 'alice@example.com', act: { sub: 'agt_abc' }, ...claims })
     .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
     .setIssuer(opts.issuer ?? ISSUER)
     .setSubject('U123')
@@ -72,24 +68,17 @@ function token(claims: Record<string, unknown> = {}, opts: { key?: JoseKey; issu
 }
 
 describe('resolving a Descope agent token', () => {
-  it('maps a valid token to the customer with the same email, and records the agent', async () => {
+  it('maps a valid token to the customer with the same email, and records the agent from act.sub', async () => {
     const { resolveAgentToken } = await import('@/lib/agentSession/descope');
-    const session = await resolveAgentToken(await token({ act: { sub: 'agt_abc' } }));
+    const session = await resolveAgentToken(await token({ email: 'ALICE@example.com' }));
     expect(session?.customer.id).toBe(82731);
-    expect(session?.agent).toEqual({ clientId: 'client-unverified', actor: { sub: 'agt_abc' }, agentId: 'agt_abc' });
+    expect(session?.agent).toBe('agt_abc');
   });
 
-  it('takes the agent ID from act.sub when present', async () => {
+  it('requires both email and act', async () => {
     const { resolveAgentToken } = await import('@/lib/agentSession/descope');
-    const session = await resolveAgentToken(await token({ act: { sub: 'agt_from_act' }, agent_id: undefined }));
-    expect(session?.agent.agentId).toBe('agt_from_act');
-  });
-
-  it('falls back to userinfo when the token has no email', async () => {
-    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
-    userinfoEmail = 'ALICE@example.com';
-    const session = await resolveAgentToken(await token({ email: undefined }));
-    expect(session?.customer.id).toBe(82731);
+    expect(await resolveAgentToken(await token({ email: undefined }))).toBeNull();
+    expect(await resolveAgentToken(await token({ act: undefined }))).toBeNull();
   });
 
   it('fails closed on a bad signature, the wrong issuer, expiry, or an unknown customer', async () => {
@@ -113,7 +102,7 @@ describe('the storefront with an agent cookie', () => {
     jar.set('DS', await token());
     const { getCurrentCustomer, getAgentSession } = await import('@/lib/auth/session-cookie');
     expect((await getCurrentCustomer())?.id).toBe(82731);
-    expect((await getAgentSession())?.agent.agentId).toBe('agt_abc');
+    expect((await getAgentSession())?.agent).toBe('agt_abc');
   });
 
   it("treats a person's own session as theirs, even with an agent cookie present", async () => {
@@ -123,25 +112,6 @@ describe('the storefront with an agent cookie', () => {
     const { getAgentSession, getCurrentCustomer } = await import('@/lib/auth/session-cookie');
     expect((await getCurrentCustomer())?.id).toBe(82731);
     expect(await getAgentSession()).toBeNull();
-  });
-
-  it('refuses payment method changes from an agent', async () => {
-    jar.set('DS', await token());
-    const { addPaymentMethodAction, deletePaymentMethodAction } = await import('@/app/account/actions');
-    const form = new FormData();
-    form.set('brand', 'visa'); form.set('last4', '4242'); form.set('expMonth', '12'); form.set('expYear', '2030'); form.set('holderName', 'Alice Chen');
-    expect((await addPaymentMethodAction({}, form)).error).toMatch(/AI agents can't change payment methods/);
-    const del = new FormData(); del.set('id', '1');
-    expect((await deletePaymentMethodAction({}, del)).error).toMatch(/AI agents can't/);
-  });
-
-  it('lets the customer change payment methods themselves', async () => {
-    const { createSession } = await import('@/lib/auth/session');
-    jar.set('nb_session', await createSession(82731));
-    const { addPaymentMethodAction } = await import('@/app/account/actions');
-    const form = new FormData();
-    form.set('brand', 'visa'); form.set('last4', '4242'); form.set('expMonth', '12'); form.set('expYear', '2030'); form.set('holderName', 'Alice Chen');
-    expect(await addPaymentMethodAction({}, form)).toEqual({ saved: true });
   });
 
   it('signing out clears the agent cookie', async () => {
