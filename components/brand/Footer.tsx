@@ -53,8 +53,9 @@ export function Footer() {
 
       <div className="border-t border-rule">
         <p className="mx-auto max-w-6xl px-6 py-5 text-xs text-muted">
-          A reference implementation, not a real retailer. Nothing here can be
-          bought and no payment is ever processed.
+          Northbound is a demo store from Descope for trying AI agents that shop
+          for you. Checkout works and orders are real in the demo, but no
+          payment is charged and nothing ships.
         </p>
       </div>
     </footer>
