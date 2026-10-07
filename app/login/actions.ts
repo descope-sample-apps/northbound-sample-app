@@ -43,7 +43,8 @@ export async function loginAction(
   const userAgent = (await headers()).get('user-agent') ?? undefined;
   await setSessionCookie(await createSession(result.customerId, userAgent));
 
-  // Signing in for a Descope flow (External Authentication): hand back to Descope.
+  // Optional: only when Descope's External Authentication action sent the customer here to
+  // approve an agent (see lib/agentSession/externalAuth.ts). Ordinary sign-ins skip this.
   if (formData.has('external_auth_req_id')) {
     const requestId = externalAuthRequestId(formData.get('external_auth_req_id'));
     let next: string;

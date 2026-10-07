@@ -10,7 +10,9 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // Sent here by a Descope flow to sign in (External Authentication).
+  // Optional: Descope's External Authentication action sends customers here with an
+  // external_auth_req_id to approve an agent (see lib/agentSession/externalAuth.ts).
+  // Without one, this is the ordinary sign-in page.
   const requestId = externalAuthRequestId((await searchParams).external_auth_req_id);
   if (requestId) {
     const customer = await getHumanCustomer();

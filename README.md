@@ -37,7 +37,9 @@ To turn it on, set these in `.env.local` and run Agent Edge in front of the stor
 | `FRONT_DOOR_URL` | The Agent Edge front door, for step-up |
 | `STEP_UP_SECRET` | The same value as the front door's `STEP_UP_SECRET` |
 | `DEMO_AUTO_SIGNUP` | `true` creates an account, with a sample address and test card, the first time someone approves an agent with a new email. For demos. |
-| `DESCOPE_PROJECT_ID`, `DESCOPE_MANAGEMENT_KEY` | Optional. Lets customers approve agents by signing in to Northbound itself, using Descope's External Authentication action with `/login` as its URL. |
+
+> [!NOTE]
+> **Optional: approve agents with a Northbound login.** By default, customers approve an agent by signing in through Descope, with a one-time code sent to their email or a social login such as Google, so you don't need anything here. To show customers approving with the Northbound account they already have, add Descope's External Authentication action to the approval flow with `https://<your site>/login` as its URL, and set `DESCOPE_PROJECT_ID` and `DESCOPE_MANAGEMENT_KEY`. Northbound then signs the customer in and tells Descope who they are ([`lib/agentSession/externalAuth.ts`](lib/agentSession/externalAuth.ts)).
 
 ## Deploy
 
