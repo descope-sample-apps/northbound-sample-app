@@ -4,6 +4,8 @@ A sample outdoor gear store: catalog, cart, checkout, order history, account pag
 
 It's an ordinary store. It shows how [Agent Edge](https://github.com/descope/agent-edge) lets customers' AI agents shop for them with a Descope token, while the store itself barely changes.
 
+![The Northbound storefront](docs/storefront.png)
+
 ## Run it
 
 ```bash
@@ -48,5 +50,3 @@ SQLite on Vercel doesn't keep writes, so point `DATABASE_URL` at a hosted libsql
 | `pnpm test` | Test suite |
 | `pnpm db:setup` | Migrate and seed. Safe to re-run between demos. |
 | `pnpm db:generate` | Regenerate migrations after a schema change |
-
-Product photos are from [Unsplash](https://unsplash.com). Credits are in [`public/products/CREDITS.md`](public/products/CREDITS.md).
