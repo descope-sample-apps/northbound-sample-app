@@ -45,11 +45,19 @@ sits in front of it and does nearly everything:
 The agent-ready front door asks the customer to approve the agent through Descope
 CIBA, then puts the Descope access token in a `DS` cookie in the agent's browser.
 
-**Northbound's only change is accepting that token:**
-[`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks it against the
-Descope inbound app, and [`lib/auth/session-cookie.ts`](lib/auth/session-cookie.ts)
-uses it to sign the agent in as the customer with the same email. A customer's
-own session always wins. The boundary test keeps agent code confined to those two files.
+**Northbound's change is accepting that token, and asking for approval before an agent buys:**
+
+- [`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks the token against
+  the Descope inbound app, and [`lib/auth/session-cookie.ts`](lib/auth/session-cookie.ts)
+  uses it to sign the agent in as the customer with the same email. A customer's own
+  session always wins.
+- Agents connect read-only (`orders:read`). At checkout,
+  [`lib/agentSession/stepUp.ts`](lib/agentSession/stepUp.ts) sends an agent without
+  `orders:write` to the front door with a signed description of the order. The customer
+  approves that order through Descope, the agent comes back with a token that allows it,
+  and checkout goes through. Three lines in `app/checkout/actions.ts` call it.
+
+The boundary test keeps agent code confined to `lib/agentSession/` and those two call sites.
 
 ### Run it
 

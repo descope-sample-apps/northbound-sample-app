@@ -20,6 +20,8 @@ export type AgentSession = {
   customer: Customer;
   /** Which agent is acting for the customer: the token's act.sub. */
   agent: string;
+  /** What the customer allowed it to do, from the token's scope claim. */
+  scopes: string[];
 };
 
 let keys: { url: string; issuer: string; jwks: ReturnType<typeof createRemoteJWKSet> } | undefined;
@@ -57,7 +59,8 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const [customer] = await db.select().from(customers)
       .where(sql`lower(${customers.email}) = ${payload.email.toLowerCase()}`)
       .limit(1);
-    return customer ? { customer, agent } : null;
+    const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
+    return customer ? { customer, agent, scopes } : null;
   } catch (error) {
     console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));
     return null;

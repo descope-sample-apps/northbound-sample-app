@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
+import { requireOrderApproval } from '@/lib/agentSession/stepUp';
 import { placeOrder } from '@/lib/services/orders';
 import { PriceChangedError, ServiceError } from '@/lib/services/errors';
 
@@ -13,6 +14,8 @@ export async function placeOrderAction(
   formData: FormData,
 ): Promise<CheckoutState> {
   const customer = await requireCustomer();
+  const needsApproval = await requireOrderApproval(customer);
+  if (needsApproval) return needsApproval;
 
   let orderNumber: number;
 

@@ -11,6 +11,7 @@ vi.mock('@/db/client', () => ({
   },
 }));
 vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ origin: 'https://shop.test' }),
   cookies: async () => ({
     get: (name: string) => (jar.has(name) ? { name, value: jar.get(name)! } : undefined),
     set: (name: string, value: string) => { jar.set(name, value); },
@@ -119,5 +120,77 @@ describe('the storefront with an agent cookie', () => {
     const { clearSessionCookie } = await import('@/lib/auth/session-cookie');
     await clearSessionCookie();
     expect(jar.has('DS')).toBe(false);
+  });
+});
+
+describe('step-up for agent purchases', () => {
+  const STEP_UP_SECRET = 'step-up-secret';
+
+  beforeEach(() => {
+    process.env.FRONT_DOOR_URL = 'https://agents.test';
+    process.env.STEP_UP_SECRET = STEP_UP_SECRET;
+  });
+  afterEach(() => {
+    delete process.env.FRONT_DOOR_URL;
+    delete process.env.STEP_UP_SECRET;
+  });
+
+  /** Puts one of the product in Alice's cart and returns the checkout form for it. */
+  async function checkoutForm(slug: string) {
+    const schema = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const { addToCart, getCart } = await import('@/lib/services/cart');
+    const { getProductBySlug } = await import('@/lib/services/catalog');
+    await addToCart(82731, (await getProductBySlug(slug)).id, 1);
+    const [address] = await tdb.db.select().from(schema.addresses).where(eq(schema.addresses.customerId, 82731));
+    const [card] = await tdb.db.select().from(schema.paymentMethods).where(eq(schema.paymentMethods.customerId, 82731));
+    const form = new FormData();
+    form.set('addressId', String(address.id));
+    form.set('paymentMethodId', String(card.id));
+    form.set('expectedTotalCents', String((await getCart(82731)).totalCents));
+    return { form, totalCents: (await getCart(82731)).totalCents };
+  }
+
+  async function placeOrder(form: FormData): Promise<string> {
+    const { placeOrderAction } = await import('@/app/checkout/actions');
+    try {
+      await placeOrderAction({}, form);
+    } catch (error) {
+      return String((error as Error).message);
+    }
+    return 'no redirect';
+  }
+
+  it('sends a read-only agent to the front door with a signed description of the order', async () => {
+    jar.set('DS', await token({ scope: 'openid orders:read' }));
+    const { form, totalCents } = await checkoutForm('cascade-45l');
+    const outcome = await placeOrder(form);
+    expect(outcome).toMatch(/^redirect:https:\/\/agents\.test\/step-up\?/);
+
+    const url = new URL(outcome.slice('redirect:'.length));
+    expect(url.searchParams.get('return_to')).toBe('https://shop.test/checkout');
+    const [body, signature] = url.searchParams.get('request')!.split('.');
+    const { createHmac } = await import('node:crypto');
+    expect(signature).toBe(createHmac('sha256', STEP_UP_SECRET).update(body).digest('base64url'));
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+    expect(payload.email).toBe('alice@example.com');
+    expect(payload.amount).toBe(`$${(totalCents / 100).toFixed(2)}`);
+    expect(payload.exp).toBeGreaterThan(Date.now() / 1000);
+
+    const { listOrders } = await import('@/lib/services/orders');
+    expect(await listOrders(82731)).toHaveLength(0);
+  });
+
+  it('lets an agent whose token has orders:write place the order', async () => {
+    jar.set('DS', await token({ scope: 'openid orders:write' }));
+    const { form } = await checkoutForm('cascade-45l');
+    expect(await placeOrder(form)).toMatch(/^redirect:\/checkout\/confirmation\//);
+  });
+
+  it("doesn't change checkout for the customer", async () => {
+    const { createSession } = await import('@/lib/auth/session');
+    jar.set('nb_session', await createSession(82731));
+    const { form } = await checkoutForm('cascade-45l');
+    expect(await placeOrder(form)).toMatch(/^redirect:\/checkout\/confirmation\//);
   });
 });

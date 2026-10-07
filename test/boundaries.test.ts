@@ -38,8 +38,11 @@ const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
  */
 const AGENT_DIR = join('lib', 'agentSession');
 
-/** The only storefront file that imports the agent code: the session lookup. */
-const AGENT_AWARE_FILES = [join('lib', 'auth', 'session-cookie.ts')];
+/** The only storefront files that import the agent code: the session lookup and checkout's step-up. */
+const AGENT_AWARE_FILES = [
+  join('app', 'checkout', 'actions.ts'),
+  join('lib', 'auth', 'session-cookie.ts'),
+];
 
 describe('the agent-ready graft stays contained', () => {
   it('is referenced only from the files listed in AGENT_AWARE_FILES', () => {
