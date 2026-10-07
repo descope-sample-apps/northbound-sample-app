@@ -20,8 +20,6 @@ Open http://localhost:3000. It needs no configuration or external services.
 | `bob@example.com` | `northbound-legacy-99` |
 | `carol@example.com` | `summit-ridge-4410` |
 
-Bob's password is checked by a simulated legacy login service ([`app/legacy-auth/verify`](app/legacy-auth/verify/route.ts)) rather than Northbound's own database.
-
 ## AI agents
 
 Agent Edge runs in front of the store and handles the agent side: recognizing agents, pointing them to the front door, getting the customer's approval through Descope, and blocking payment pages. Northbound's own sign-in, sessions, and pages are unchanged. It has two small additions:
