@@ -194,3 +194,30 @@ describe('step-up for agent purchases', () => {
     expect(await placeOrder(form)).toMatch(/^redirect:\/checkout\/confirmation\//);
   });
 });
+
+describe('creating an account on first approval (DEMO_AUTO_SIGNUP)', () => {
+  afterEach(() => { delete process.env.DEMO_AUTO_SIGNUP; });
+
+  it('is off by default: an unknown email is not signed in', async () => {
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+    expect(await resolveAgentToken(await token({ email: 'new.reader@example.org' }))).toBeNull();
+  });
+
+  it('creates the customer with an address and a test card, once', async () => {
+    process.env.DEMO_AUTO_SIGNUP = 'true';
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+    const first = await resolveAgentToken(await token({ email: 'New.Reader@example.org', name: 'Riley Reader' }));
+    expect(first?.customer.email).toBe('new.reader@example.org');
+    expect(first?.customer.name).toBe('Riley Reader');
+    expect(first?.customer.emailVerified).toBe(true);
+
+    const { listAddresses } = await import('@/lib/services/addresses');
+    const { listPaymentMethods } = await import('@/lib/services/paymentMethods');
+    expect((await listAddresses(first!.customer.id)).length).toBe(1);
+    expect((await listPaymentMethods(first!.customer.id))[0].last4).toBe('4242');
+
+    const again = await resolveAgentToken(await token({ email: 'new.reader@example.org' }));
+    expect(again?.customer.id).toBe(first!.customer.id);
+    expect((await listAddresses(first!.customer.id)).length).toBe(1);
+  });
+});

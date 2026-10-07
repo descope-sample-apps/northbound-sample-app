@@ -36,6 +36,8 @@ To turn it on, set these in `.env.local` and run Agent Edge in front of the stor
 | `DESCOPE_DISCOVERY_URL` | Your Descope inbound app's Discovery URL |
 | `FRONT_DOOR_URL` | The Agent Edge front door, for step-up |
 | `STEP_UP_SECRET` | The same value as the front door's `STEP_UP_SECRET` |
+| `DEMO_AUTO_SIGNUP` | `true` creates an account, with a sample address and test card, the first time someone approves an agent with a new email. For demos. |
+| `DESCOPE_PROJECT_ID`, `DESCOPE_MANAGEMENT_KEY` | Optional. Lets customers approve agents by signing in to Northbound itself, using Descope's External Authentication action with `/login` as its URL. |
 
 ## Deploy
 

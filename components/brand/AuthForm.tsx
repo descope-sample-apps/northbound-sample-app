@@ -11,16 +11,22 @@ export function AuthForm({
   submitLabel,
   pendingLabel,
   mode,
+  hidden,
 }: {
   action: (previous: State, formData: FormData) => Promise<State>;
   submitLabel: string;
   pendingLabel: string;
   mode: 'login' | 'signup';
+  /** Extra fields carried through the form unchanged. */
+  hidden?: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState<State, FormData>(action, {});
 
   return (
     <form action={formAction} className="space-y-5">
+      {hidden && Object.entries(hidden).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       {mode === 'signup' && (
         <Field label="Name" name="name" type="text" autoComplete="name" required />
       )}

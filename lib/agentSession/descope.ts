@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { customers, type Customer } from '@/db/schema';
+import { createDemoCustomer } from './demoSignup';
 
 /**
  * THE GRAFT: Northbound's only agent code.
@@ -56,9 +57,12 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     if (typeof payload.email !== 'string' || typeof agent !== 'string') return null;
 
     // Descope's user and Northbound's customer are the same person when their emails match.
-    const [customer] = await db.select().from(customers)
+    const [existing] = await db.select().from(customers)
       .where(sql`lower(${customers.email}) = ${payload.email.toLowerCase()}`)
       .limit(1);
+    const customer = existing ?? (process.env.DEMO_AUTO_SIGNUP === 'true'
+      ? await createDemoCustomer(payload.email, typeof payload.name === 'string' ? payload.name : undefined)
+      : undefined);
     const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
     return customer ? { customer, agent, scopes } : null;
   } catch (error) {

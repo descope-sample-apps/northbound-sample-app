@@ -38,11 +38,13 @@ const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
  */
 const AGENT_DIR = join('lib', 'agentSession');
 
-/** The only storefront files that import the agent code: the session lookup and checkout's step-up. */
+/** The only storefront files that import the agent code: the session lookup, checkout's step-up, and login's External Authentication. */
 const AGENT_AWARE_FILES = [
   join('app', 'checkout', 'actions.ts'),
+  join('app', 'login', 'actions.ts'),
+  join('app', 'login', 'page.tsx'),
   join('lib', 'auth', 'session-cookie.ts'),
-];
+].sort();
 
 describe('the Agent Edge graft stays contained', () => {
   it('is referenced only from the files listed in AGENT_AWARE_FILES', () => {

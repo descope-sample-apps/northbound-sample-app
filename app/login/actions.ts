@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { verifyCredentials } from '@/lib/auth/verify';
 import { createSession, revokeSession, SESSION_COOKIE } from '@/lib/auth/session';
 import { clearSessionCookie, setSessionCookie } from '@/lib/auth/session-cookie';
+import { completeExternalAuth, externalAuthRequestId } from '@/lib/agentSession/externalAuth';
 
 export type LoginState = { error?: string };
 
@@ -41,6 +42,19 @@ export async function loginAction(
 
   const userAgent = (await headers()).get('user-agent') ?? undefined;
   await setSessionCookie(await createSession(result.customerId, userAgent));
+
+  // Signing in for a Descope flow (External Authentication): hand back to Descope.
+  if (formData.has('external_auth_req_id')) {
+    const requestId = externalAuthRequestId(formData.get('external_auth_req_id'));
+    let next: string;
+    try {
+      if (!requestId) throw new Error('malformed request ID');
+      next = await completeExternalAuth(requestId, result.customerId);
+    } catch {
+      return { error: "You're signed in, but we couldn't finish the approval. Go back and try again." };
+    }
+    redirect(next);
+  }
 
   redirect('/');
 }
