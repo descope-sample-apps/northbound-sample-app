@@ -37,7 +37,7 @@ changes. A Cloudflare Worker from [Agent Edge](https://github.com/descope/agent-
 sits in front of it and does nearly everything:
 
 - **Recognizes agents**, by Web Bot Auth signature, user agent, or the session cookie below.
-- **Serves the discovery files** agents look for: `/.well-known/oauth-protected-resource`, `/auth.md` and `/agents`.
+- **Serves the discovery files** agents look for: the protected resource metadata (`/.well-known/oauth-protected-resource`) and an `/agents` page.
 - **Shows agents the way in.** It adds a note for agents to `/login`, and sends recognized agents there to the front door.
 - **Blocks agents from payment methods** (`BLOCKED_AGENT_PATHS = "/account/payment-methods*"`).
 - **Logs every agent request** with the agent's identity.
