@@ -49,6 +49,9 @@ export default async function OrdersPage() {
                 #{order.orderNumber}
               </Link>
               <div className="text-xs text-muted">{dateFormat.format(order.placedAt)}</div>
+              {order.placedByAgent && (
+                <div className="text-xs text-ember">By your AI assistant</div>
+              )}
             </div>
 
             <span

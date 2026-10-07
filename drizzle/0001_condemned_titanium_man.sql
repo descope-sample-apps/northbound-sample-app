@@ -1,0 +1,1 @@
+ALTER TABLE `orders` ADD `placed_by_agent` text;

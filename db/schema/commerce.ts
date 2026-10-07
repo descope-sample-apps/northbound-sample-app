@@ -39,6 +39,9 @@ export const orders = sqliteTable('orders', {
   totalCents: integer('total_cents').notNull(),
   shippingAddressId: integer('shipping_address_id').notNull().references(() => addresses.id),
   paymentMethodId: integer('payment_method_id').notNull().references(() => paymentMethods.id),
+  // The AI agent that placed the order for the customer, from its Descope token's act.sub.
+  // Null when the customer placed it themselves.
+  placedByAgent: text('placed_by_agent'),
 });
 
 // nameSnapshot and unitPriceCents exist so order history does not silently

@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { requireCustomer } from '@/lib/auth/session-cookie';
+import { getAgentSession, requireCustomer } from '@/lib/auth/session-cookie';
 import { requireOrderApproval } from '@/lib/agentSession/stepUp';
 import { placeOrder } from '@/lib/services/orders';
 import { PriceChangedError, ServiceError } from '@/lib/services/errors';
@@ -27,6 +27,8 @@ export async function placeOrderAction(
       // anything else — a price that moved while they were on this page is a
       // question for them, not a surprise on their card.
       expectedTotalCents: Number(formData.get('expectedTotalCents')),
+      // Record which agent placed it, so the customer and support can tell.
+      placedByAgent: (await getAgentSession())?.agent,
     });
     orderNumber = order.orderNumber;
   } catch (error) {

@@ -20,10 +20,12 @@ Open http://localhost:3000. No configuration needed.
 
 ## AI agents
 
-Agent Edge runs in front of the store. It recognizes agents, sends them to the front door for the customer's approval, and blocks payment pages. The store's own sign-in and pages don't change. It adds two things:
+Agent Edge runs in front of the store. It recognizes agents, sends them to the front door for the customer's approval, and blocks payment pages. The store's own sign-in doesn't change. It adds two things:
 
 - **It accepts the agent's token.** [`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks the Descope token in the `DS` cookie and signs the agent in as the customer with the same email. The token needs `orders:read` or `orders:write`.
 - **It asks before an agent buys.** Agents connect read-only. At checkout, [`lib/agentSession/stepUp.ts`](lib/agentSession/stepUp.ts) sends an agent without `orders:write` to the front door to approve that order.
+
+It also shows which orders an agent placed, which is optional. Checkout saves the token's `act.sub` with the order, and order history marks those orders "By your AI assistant".
 
 Set these in `.env.local`, and run Agent Edge in front of the store (see its [README](https://github.com/descope/agent-edge)):
 

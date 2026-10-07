@@ -23,6 +23,8 @@ const PlaceOrderSchema = z.object({
    * instead of quietly charging a different number.
    */
   expectedTotalCents: z.number().int().nonnegative().optional(),
+  /** The AI agent placing the order for the customer, if one is. */
+  placedByAgent: z.string().min(1).optional(),
 });
 
 export type PlaceOrderInput = z.input<typeof PlaceOrderSchema>;
@@ -137,6 +139,7 @@ export async function placeOrder(
       totalCents: totals.totalCents,
       shippingAddressId: address.id,
       paymentMethodId: payment.id,
+      placedByAgent: input.placedByAgent ?? null,
     }).returning();
 
     await tx.insert(orderItems).values(lines.map(({ item, product }) => ({
