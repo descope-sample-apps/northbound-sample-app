@@ -45,29 +45,16 @@ sits in front of it and does nearly everything:
 The agent-ready front door asks the customer to approve the agent through Descope
 CIBA, then puts the Descope access token in a `DS` cookie in the agent's browser.
 
-**Northbound's change is accepting that token and honoring its limit:**
-
-- [`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks the token against
-  the Descope inbound app, and [`lib/auth/session-cookie.ts`](lib/auth/session-cookie.ts)
-  uses it to sign the agent in as the customer with the same email. A customer's own
-  session always wins.
-- [`app/checkout/actions.ts`](app/checkout/actions.ts) rejects an agent's order above the
-  limit in the token's `authorization_details`, and refuses orders from agents whose token
-  has no purchase limit. The customer's own orders aren't limited.
-
-Until Descope supports Rich Authorization Requests, the limit is fixed for each agent
-tier: the tier's inbound app adds the claim, and the front door shows the same limit in
-the approval message. The check is per order; the 7-day `period` isn't tracked yet.
+**Northbound's only change is accepting that token:**
+[`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks it against the
+Descope inbound app, and [`lib/auth/session-cookie.ts`](lib/auth/session-cookie.ts)
+uses it to sign the agent in as the customer with the same email. A customer's
+own session always wins. The boundary test keeps agent code confined to those two files.
 
 ### Run it
 
 1. In Descope, create users with the seeded emails (`alice@example.com` and so
-   on), and an inbound app with CIBA turned on whose tokens include `email`, `act`,
-   and, for agents allowed to buy, a purchase limit:
-
-   ```json
-   "authorization_details": [{ "type": "purchase", "max_amount": { "value": "200.00", "currency": "USD" }, "period": "P7D" }]
-   ```
+   on), and an inbound app with CIBA turned on whose tokens include `email` and `act`.
 2. Set `DESCOPE_DISCOVERY_URL` in `.env.local` to the inbound app's Discovery
    URL, then `pnpm dev` (port 3000).
 3. Start the [agent-ready front door](https://github.com/descope/agent-ready/tree/main/front-door)

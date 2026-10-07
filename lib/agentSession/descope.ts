@@ -20,24 +20,7 @@ export type AgentSession = {
   customer: Customer;
   /** Which agent is acting for the customer: the token's act.sub. */
   agent: string;
-  /**
-   * The most this agent may spend on one order, in cents, from the token's purchase
-   * authorization_details. Null means the agent may not place orders at all.
-   */
-  purchaseLimitCents: number | null;
 };
-
-/**
- * Reads { type: "purchase", max_amount: { value: "200.00", currency: "USD" } } out of
- * authorization_details. Until Descope supports RAR, the inbound app sets this claim per tier.
- */
-function purchaseLimitCents(details: unknown): number | null {
-  if (!Array.isArray(details)) return null;
-  const purchase = details.find((d) => d?.type === 'purchase' && d?.max_amount?.currency === 'USD');
-  const value = purchase?.max_amount?.value;
-  if (typeof value !== 'string' || !/^\d+(\.\d{1,2})?$/.test(value)) return null;
-  return Math.round(Number(value) * 100);
-}
 
 let keys: { url: string; issuer: string; jwks: ReturnType<typeof createRemoteJWKSet> } | undefined;
 
@@ -74,7 +57,7 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const [customer] = await db.select().from(customers)
       .where(sql`lower(${customers.email}) = ${payload.email.toLowerCase()}`)
       .limit(1);
-    return customer ? { customer, agent, purchaseLimitCents: purchaseLimitCents(payload.authorization_details) } : null;
+    return customer ? { customer, agent } : null;
   } catch (error) {
     console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));
     return null;
