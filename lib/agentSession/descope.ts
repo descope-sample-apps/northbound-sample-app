@@ -44,7 +44,8 @@ export function resetAgentSessionCache(): void {
 
 /**
  * Fails closed: no DESCOPE_DISCOVERY_URL, a bad signature, the wrong issuer or audience,
- * an expired token, a missing email or act claim, or no matching customer all resolve to null.
+ * an expired token, a missing email or act claim, neither Northbound scope, or no matching
+ * customer all resolve to null.
  */
 export async function resolveAgentToken(token: string): Promise<AgentSession | null> {
   const discoveryUrl = process.env.DESCOPE_DISCOVERY_URL;
@@ -56,6 +57,11 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const agent = (payload.act as { sub?: unknown } | undefined)?.sub;
     if (typeof payload.email !== 'string' || typeof agent !== 'string') return null;
 
+    // The customer approved read-only access (orders:read) or a purchase (orders:write). A token
+    // with neither wasn't issued for shopping here, so it doesn't sign an agent in.
+    const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
+    if (!scopes.includes('orders:read') && !scopes.includes('orders:write')) return null;
+
     // Descope's user and Northbound's customer are the same person when their emails match.
     const [existing] = await db.select().from(customers)
       .where(sql`lower(${customers.email}) = ${payload.email.toLowerCase()}`)
@@ -63,7 +69,6 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const customer = existing ?? (process.env.DEMO_AUTO_SIGNUP === 'true'
       ? await createDemoCustomer(payload.email, typeof payload.name === 'string' ? payload.name : undefined)
       : undefined);
-    const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
     return customer ? { customer, agent, scopes } : null;
   } catch (error) {
     console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));

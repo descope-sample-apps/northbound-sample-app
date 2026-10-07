@@ -26,7 +26,7 @@ Open http://localhost:3000. It needs no configuration or external services.
 
 Agent Edge runs in front of the store and handles the agent side: recognizing agents, pointing them to the front door, getting the customer's approval through Descope, and blocking payment pages. Northbound's own sign-in, sessions, and pages are unchanged. It has two small additions:
 
-- **It accepts the agent's Descope token.** [`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) validates the token in the `DS` cookie, and the agent is signed in as the customer with the same email.
+- **It accepts the agent's Descope token.** [`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) validates the token in the `DS` cookie, and the agent is signed in as the customer with the same email. The token must carry `orders:read` or `orders:write`, the access the customer approved.
 - **It asks for approval before an agent buys.** Agents connect read-only. At checkout, [`lib/agentSession/stepUp.ts`](lib/agentSession/stepUp.ts) sends an agent without `orders:write` to the front door's `/step-up` to approve that order.
 
 To turn it on, set these in `.env.local` and run Agent Edge in front of the store. The [Agent Edge README](https://github.com/descope/agent-edge) has the setup.

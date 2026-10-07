@@ -59,7 +59,7 @@ afterEach(async () => {
 });
 
 function token(claims: Record<string, unknown> = {}, opts: { key?: JoseKey; issuer?: string; exp?: string | number } = {}) {
-  return new SignJWT({ email: 'alice@example.com', act: { sub: 'agt_abc' }, ...claims })
+  return new SignJWT({ email: 'alice@example.com', act: { sub: 'agt_abc' }, scope: 'openid orders:read', ...claims })
     .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
     .setIssuer(opts.issuer ?? ISSUER)
     .setSubject('U123')
@@ -238,5 +238,20 @@ describe('the resource the token is for (DESCOPE_AUDIENCE)', () => {
     const { resolveAgentToken } = await import('@/lib/agentSession/descope');
     expect(await resolveAgentToken(await token({ aud: 'https://other.example/api' }))).toBeNull();
     expect(await resolveAgentToken(await token())).toBeNull();
+  });
+});
+
+describe('the scopes an agent needs to sign in', () => {
+  it('accepts orders:read or orders:write', async () => {
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+    expect((await resolveAgentToken(await token({ scope: 'openid orders:read' })))?.customer.id).toBe(82731);
+    expect((await resolveAgentToken(await token({ scope: 'openid orders:write' })))?.customer.id).toBe(82731);
+  });
+
+  it('rejects a token with neither, even if it is otherwise valid', async () => {
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+    expect(await resolveAgentToken(await token({ scope: 'openid email' }))).toBeNull();
+    expect(await resolveAgentToken(await token({ scope: undefined }))).toBeNull();
+    expect(await resolveAgentToken(await token({ scope: 'orders:readonly' }))).toBeNull();
   });
 });
