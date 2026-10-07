@@ -62,9 +62,12 @@ The boundary test keeps agent code confined to `lib/agentSession/` and those two
 ### Run it
 
 1. In Descope, create users with the seeded emails (`alice@example.com` and so
-   on), and an inbound app with CIBA turned on whose tokens include `email` and `act`.
-2. Set `DESCOPE_DISCOVERY_URL` in `.env.local` to the inbound app's Discovery
-   URL, then `pnpm dev` (port 3000).
+   on), and an inbound app with CIBA turned on whose tokens include `email`, `act`,
+   and the `orders:read` or `orders:write` scope. Keep `orders:write` tokens short-lived,
+   so one approval covers about one purchase.
+2. In `.env.local`, set `DESCOPE_DISCOVERY_URL` to the inbound app's Discovery URL,
+   `FRONT_DOOR_URL` to the front door, and `STEP_UP_SECRET` to the same value as the
+   front door's. Then `pnpm dev` (port 3000).
 3. Start the [agent-ready front door](https://github.com/descope/agent-ready/tree/main/front-door)
    on port 8788, with `COOKIE_DOMAIN` unset.
 4. Start the Worker in front of Northbound:
