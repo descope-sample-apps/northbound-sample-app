@@ -6,7 +6,7 @@ import { customers, type Customer } from '@/db/schema';
 /**
  * THE GRAFT: Northbound's only agent code.
  *
- * A Cloudflare Worker from agent-ready sits in front of the store and does the rest:
+ * A Cloudflare Worker from Agent Edge sits in front of the store and does the rest:
  * it verifies agents, serves the discovery files, sends agents on /login to the front
  * door, and blocks agents from payment methods. The front door gets the customer's
  * approval with Descope CIBA and puts the Descope access token in a DS cookie in the

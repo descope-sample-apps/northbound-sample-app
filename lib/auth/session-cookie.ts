@@ -5,7 +5,7 @@ import type { Customer } from '@/db/schema';
 import { resolveSession, SESSION_COOKIE, SESSION_TTL_MS } from './session';
 import { resolveAgentToken, type AgentSession } from '@/lib/agentSession/descope';
 
-/** The cookie the agent-ready front door sets in an agent's browser. */
+/** The cookie the Agent Edge front door sets in an agent's browser. */
 const AGENT_COOKIE = process.env.AGENT_SESSION_COOKIE || 'DS';
 
 /**

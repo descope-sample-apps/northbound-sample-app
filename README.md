@@ -30,10 +30,10 @@ Optional: `cp .env.example .env.local`. Every value has a working default.
 
 ---
 
-## AI agents, through agent-ready
+## AI agents, through Agent Edge
 
 This branch lets customers' AI agents shop for them, and the store itself barely
-changes. A Cloudflare Worker from [agent-ready](https://github.com/descope/agent-ready)
+changes. A Cloudflare Worker from [Agent Edge](https://github.com/descope/agent-edge)
 sits in front of it and does nearly everything:
 
 - **Recognizes agents**, by Web Bot Auth signature, user agent, or the session cookie below.
@@ -42,7 +42,7 @@ sits in front of it and does nearly everything:
 - **Blocks agents from payment methods** (`BLOCKED_AGENT_PATHS = "/account/payment-methods*"`).
 - **Logs every agent request** with the agent's identity.
 
-The agent-ready front door asks the customer to approve the agent through Descope
+The Agent Edge front door asks the customer to approve the agent through Descope
 CIBA, then puts the Descope access token in a `DS` cookie in the agent's browser.
 
 **Northbound's change is accepting that token, and asking for approval before an agent buys:**
@@ -68,12 +68,12 @@ The boundary test keeps agent code confined to `lib/agentSession/` and those two
 2. In `.env.local`, set `DESCOPE_DISCOVERY_URL` to the inbound app's Discovery URL,
    `FRONT_DOOR_URL` to the front door, and `STEP_UP_SECRET` to the same value as the
    front door's. Then `pnpm dev` (port 3000).
-3. Start the [agent-ready front door](https://github.com/descope/agent-ready/tree/main/front-door)
+3. Start the [Agent Edge front door](https://github.com/descope/agent-edge/tree/main/front-door)
    on port 8788, with `COOKIE_DOMAIN` unset.
 4. Start the Worker in front of Northbound:
 
    ```bash
-   cd agent-ready/cloudflare
+   cd agent-edge/cloudflare
    npx wrangler dev --var UPSTREAM_ORIGIN:http://localhost:3000 --var MODE:route \
      --var FRONT_DOOR_URL:http://localhost:8788 --var LOGIN_PATHS:/login \
      --var BLOCKED_AGENT_PATHS:"/account/payment-methods*" --var SITE_NAME:Northbound \

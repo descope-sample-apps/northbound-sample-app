@@ -8,7 +8,7 @@ import { getCart } from '@/lib/services/cart';
 /**
  * Call before placing an order. A person, or an agent whose token has orders:write, passes
  * (returns undefined). Any other agent is redirected to approve this order through the
- * agent-ready front door, or gets an error if step-up isn't configured.
+ * Agent Edge front door, or gets an error if step-up isn't configured.
  */
 export async function requireOrderApproval(customer: Customer): Promise<{ error: string } | undefined> {
   const agent = await getAgentSession();
@@ -24,7 +24,7 @@ export async function requireOrderApproval(customer: Customer): Promise<{ error:
 /**
  * Where to send an agent that needs the customer's approval for one purchase.
  *
- * The agent-ready front door runs a Descope CIBA request whose message names this order, and
+ * The Agent Edge front door runs a Descope CIBA request whose message names this order, and
  * the agent comes back with a token that allows it. The order is signed with a secret shared
  * with the front door, so the agent can't change what the customer is asked to approve.
  * Returns null when FRONT_DOOR_URL or STEP_UP_SECRET isn't set.

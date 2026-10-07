@@ -31,7 +31,7 @@ const STOREFRONT_DIRS = ['app', 'lib', 'components'];
 const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
 
 /**
- * THE GRAFT. Agent access arrives through agent-ready's Cloudflare Worker and front
+ * THE GRAFT. Agent access arrives through Agent Edge's Cloudflare Worker and front
  * door, which hand the agent's browser a Descope token in a cookie. Everything else
  * an agent needs happens at the edge, so all of Northbound's agent code is token
  * validation, and it lives in this one directory.
@@ -44,7 +44,7 @@ const AGENT_AWARE_FILES = [
   join('lib', 'auth', 'session-cookie.ts'),
 ];
 
-describe('the agent-ready graft stays contained', () => {
+describe('the Agent Edge graft stays contained', () => {
   it('is referenced only from the files listed in AGENT_AWARE_FILES', () => {
     const users = STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))
       .filter((file) => !file.startsWith(AGENT_DIR))
