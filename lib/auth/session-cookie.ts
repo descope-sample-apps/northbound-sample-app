@@ -17,7 +17,8 @@ const AGENT_COOKIE = process.env.AGENT_SESSION_COOKIE || 'DS';
  * components, server actions, and route handlers. React's cache() memoizes it
  * per request so a page that asks three times still makes one query.
  */
-const getHumanCustomer = cache(async (): Promise<Customer | null> => {
+/** A customer signed in themselves, ignoring any agent session. */
+export const getHumanCustomer = cache(async (): Promise<Customer | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   return token ? resolveSession(token) : null;
 });
