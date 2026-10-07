@@ -34,6 +34,7 @@ To turn it on, set these in `.env.local` and run Agent Edge in front of the stor
 | Variable | Value |
 | --- | --- |
 | `DESCOPE_DISCOVERY_URL` | Your Descope inbound app's Discovery URL |
+| `DESCOPE_AUDIENCE` | The Descope resource the agent's token must be issued for, such as `https://northbound.camp/agent_resource`. Tokens for any other audience are rejected. Use the same value as the front door's `RESOURCE`. |
 | `FRONT_DOOR_URL` | The Agent Edge front door, for step-up |
 | `STEP_UP_SECRET` | The same value as the front door's `STEP_UP_SECRET` |
 | `DEMO_AUTO_SIGNUP` | `true` creates an account, with a sample address and test card, the first time someone approves an agent with a new email. For demos. |

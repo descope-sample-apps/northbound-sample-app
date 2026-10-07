@@ -221,3 +221,22 @@ describe('creating an account on first approval (DEMO_AUTO_SIGNUP)', () => {
     expect((await listAddresses(first!.customer.id)).length).toBe(1);
   });
 });
+
+describe('the resource the token is for (DESCOPE_AUDIENCE)', () => {
+  const RESOURCE = 'https://northbound.camp/agent_resource';
+  afterEach(() => { delete process.env.DESCOPE_AUDIENCE; });
+
+  it('accepts a token issued for the resource', async () => {
+    process.env.DESCOPE_AUDIENCE = RESOURCE;
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+    expect((await resolveAgentToken(await token({ aud: RESOURCE })))?.customer.id).toBe(82731);
+    expect((await resolveAgentToken(await token({ aud: ['other', RESOURCE] })))?.customer.id).toBe(82731);
+  });
+
+  it('rejects a token for another resource, or with no audience', async () => {
+    process.env.DESCOPE_AUDIENCE = RESOURCE;
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+    expect(await resolveAgentToken(await token({ aud: 'https://other.example/api' }))).toBeNull();
+    expect(await resolveAgentToken(await token())).toBeNull();
+  });
+});
