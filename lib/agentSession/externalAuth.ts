@@ -3,11 +3,19 @@ import { db } from '@/db/client';
 import { customers } from '@/db/schema';
 
 /**
- * Descope's External Authentication flow action: Descope sends the customer to Northbound's
- * own login page with an external_auth_req_id, and once they've signed in here, Northbound
- * tells Descope who they are. The customer approves agents with their Northbound password.
+ * OPTIONAL: Descope External Authentication. You don't need this to use agents.
  *
- * Needs DESCOPE_PROJECT_ID and DESCOPE_MANAGEMENT_KEY (and DESCOPE_BASE_URL for a custom domain).
+ * By default, a customer approving an agent signs in through Descope itself, with a one-time
+ * code sent to their email or a social login such as Google. Northbound's login isn't involved.
+ *
+ * This file is for showing the other option: customers approve agents with the account they
+ * already have here. Add the External Authentication action to the Descope approval flow, with
+ * this site's /login as its URL. Descope sends the customer to /login?external_auth_req_id=...,
+ * they sign in to Northbound as usual, and completeExternalAuth() tells Descope who they are
+ * through the Management API. Descope then continues its flow to the consent screen.
+ *
+ * Off unless DESCOPE_PROJECT_ID and DESCOPE_MANAGEMENT_KEY are set (plus DESCOPE_BASE_URL for
+ * a custom domain). Without them, /login behaves exactly as it always has.
  */
 
 const REQUEST_ID = /^[A-Za-z0-9._~-]{1,256}$/;
