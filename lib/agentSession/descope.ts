@@ -6,7 +6,7 @@ import { customers, type Customer } from '@/db/schema';
 /**
  * THE GRAFT: Northbound's only agent code.
  *
- * A Cloudflare Worker from agent-ready sits in front of the store and does the rest:
+ * A Cloudflare Worker from Agent Edge sits in front of the store and does the rest:
  * it verifies agents, serves the discovery files, sends agents on /login to the front
  * door, and blocks agents from payment methods. The front door gets the customer's
  * approval with Descope CIBA and puts the Descope access token in a DS cookie in the
@@ -20,24 +20,9 @@ export type AgentSession = {
   customer: Customer;
   /** Which agent is acting for the customer: the token's act.sub. */
   agent: string;
-  /**
-   * The most this agent may spend on one order, in cents, from the token's purchase
-   * authorization_details. Null means the agent may not place orders at all.
-   */
-  purchaseLimitCents: number | null;
+  /** What the customer allowed it to do, from the token's scope claim. */
+  scopes: string[];
 };
-
-/**
- * Reads { type: "purchase", max_amount: { value: "200.00", currency: "USD" } } out of
- * authorization_details. Until Descope supports RAR, the inbound app sets this claim per tier.
- */
-function purchaseLimitCents(details: unknown): number | null {
-  if (!Array.isArray(details)) return null;
-  const purchase = details.find((d) => d?.type === 'purchase' && d?.max_amount?.currency === 'USD');
-  const value = purchase?.max_amount?.value;
-  if (typeof value !== 'string' || !/^\d+(\.\d{1,2})?$/.test(value)) return null;
-  return Math.round(Number(value) * 100);
-}
 
 let keys: { url: string; issuer: string; jwks: ReturnType<typeof createRemoteJWKSet> } | undefined;
 
@@ -74,7 +59,8 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const [customer] = await db.select().from(customers)
       .where(sql`lower(${customers.email}) = ${payload.email.toLowerCase()}`)
       .limit(1);
-    return customer ? { customer, agent, purchaseLimitCents: purchaseLimitCents(payload.authorization_details) } : null;
+    const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
+    return customer ? { customer, agent, scopes } : null;
   } catch (error) {
     console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));
     return null;

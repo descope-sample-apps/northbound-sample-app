@@ -11,6 +11,7 @@ vi.mock('@/db/client', () => ({
   },
 }));
 vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ origin: 'https://shop.test' }),
   cookies: async () => ({
     get: (name: string) => (jar.has(name) ? { name, value: jar.get(name)! } : undefined),
     set: (name: string, value: string) => { jar.set(name, value); },
@@ -122,8 +123,17 @@ describe('the storefront with an agent cookie', () => {
   });
 });
 
-describe('agent spending limits at checkout', () => {
-  const PURCHASE_200 = [{ type: 'purchase', max_amount: { value: '200.00', currency: 'USD' }, period: 'P7D' }];
+describe('step-up for agent purchases', () => {
+  const STEP_UP_SECRET = 'step-up-secret';
+
+  beforeEach(() => {
+    process.env.FRONT_DOOR_URL = 'https://agents.test';
+    process.env.STEP_UP_SECRET = STEP_UP_SECRET;
+  });
+  afterEach(() => {
+    delete process.env.FRONT_DOOR_URL;
+    delete process.env.STEP_UP_SECRET;
+  });
 
   /** Puts one of the product in Alice's cart and returns the checkout form for it. */
   async function checkoutForm(slug: string) {
@@ -138,46 +148,49 @@ describe('agent spending limits at checkout', () => {
     form.set('addressId', String(address.id));
     form.set('paymentMethodId', String(card.id));
     form.set('expectedTotalCents', String((await getCart(82731)).totalCents));
-    return form;
+    return { form, totalCents: (await getCart(82731)).totalCents };
   }
 
-  async function cheapestProduct() {
-    const schema = await import('@/db/schema');
-    const products = await tdb.db.select().from(schema.products);
-    return products.reduce((a, b) => (a.priceCents <= b.priceCents ? a : b));
+  async function placeOrder(form: FormData): Promise<string> {
+    const { placeOrderAction } = await import('@/app/checkout/actions');
+    try {
+      await placeOrderAction({}, form);
+    } catch (error) {
+      return String((error as Error).message);
+    }
+    return 'no redirect';
   }
 
-  it('lets an agent place an order under its limit', async () => {
-    jar.set('DS', await token({ authorization_details: PURCHASE_200 }));
-    const cheap = await cheapestProduct();
-    const form = await checkoutForm(cheap.slug);
-    const { placeOrderAction } = await import('@/app/checkout/actions');
-    await expect(placeOrderAction({}, form)).rejects.toThrow(/redirect:\/checkout\/confirmation\//);
-  });
+  it('sends a read-only agent to the front door with a signed description of the order', async () => {
+    jar.set('DS', await token({ scope: 'openid orders:read' }));
+    const { form, totalCents } = await checkoutForm('cascade-45l');
+    const outcome = await placeOrder(form);
+    expect(outcome).toMatch(/^redirect:https:\/\/agents\.test\/step-up\?/);
 
-  it('rejects an agent order over its limit', async () => {
-    jar.set('DS', await token({ authorization_details: PURCHASE_200 }));
-    const form = await checkoutForm('cascade-45l');
-    const { placeOrderAction } = await import('@/app/checkout/actions');
-    const result = await placeOrderAction({}, form);
-    expect(result.error).toMatch(/over the \$200\.00 limit/);
+    const url = new URL(outcome.slice('redirect:'.length));
+    expect(url.searchParams.get('return_to')).toBe('https://shop.test/checkout');
+    const [body, signature] = url.searchParams.get('request')!.split('.');
+    const { createHmac } = await import('node:crypto');
+    expect(signature).toBe(createHmac('sha256', STEP_UP_SECRET).update(body).digest('base64url'));
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+    expect(payload.email).toBe('alice@example.com');
+    expect(payload.amount).toBe(`$${(totalCents / 100).toFixed(2)}`);
+    expect(payload.exp).toBeGreaterThan(Date.now() / 1000);
+
     const { listOrders } = await import('@/lib/services/orders');
     expect(await listOrders(82731)).toHaveLength(0);
   });
 
-  it('refuses orders from an agent with no purchase limit in its token', async () => {
-    jar.set('DS', await token());
-    const cheap = await cheapestProduct();
-    const form = await checkoutForm(cheap.slug);
-    const { placeOrderAction } = await import('@/app/checkout/actions');
-    expect((await placeOrderAction({}, form)).error).toMatch(/isn't allowed to place orders/);
+  it('lets an agent whose token has orders:write place the order', async () => {
+    jar.set('DS', await token({ scope: 'openid orders:write' }));
+    const { form } = await checkoutForm('cascade-45l');
+    expect(await placeOrder(form)).toMatch(/^redirect:\/checkout\/confirmation\//);
   });
 
-  it("doesn't limit the customer's own orders", async () => {
+  it("doesn't change checkout for the customer", async () => {
     const { createSession } = await import('@/lib/auth/session');
     jar.set('nb_session', await createSession(82731));
-    const form = await checkoutForm('cascade-45l');
-    const { placeOrderAction } = await import('@/app/checkout/actions');
-    await expect(placeOrderAction({}, form)).rejects.toThrow(/redirect:\/checkout\/confirmation\//);
+    const { form } = await checkoutForm('cascade-45l');
+    expect(await placeOrder(form)).toMatch(/^redirect:\/checkout\/confirmation\//);
   });
 });

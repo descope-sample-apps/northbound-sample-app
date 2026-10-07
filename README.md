@@ -30,52 +30,50 @@ Optional: `cp .env.example .env.local`. Every value has a working default.
 
 ---
 
-## AI agents, through agent-ready
+## AI agents, through Agent Edge
 
 This branch lets customers' AI agents shop for them, and the store itself barely
-changes. A Cloudflare Worker from [agent-ready](https://github.com/descope/agent-ready)
+changes. A Cloudflare Worker from [Agent Edge](https://github.com/descope/agent-edge)
 sits in front of it and does nearly everything:
 
 - **Recognizes agents**, by Web Bot Auth signature, user agent, or the session cookie below.
-- **Serves the discovery files** agents look for: `/.well-known/oauth-protected-resource`, `/auth.md` and `/agents`.
+- **Serves the discovery files** agents look for: the protected resource metadata (`/.well-known/oauth-protected-resource`) and an `/agents` page.
 - **Shows agents the way in.** It adds a note for agents to `/login`, and sends recognized agents there to the front door.
 - **Blocks agents from payment methods** (`BLOCKED_AGENT_PATHS = "/account/payment-methods*"`).
 - **Logs every agent request** with the agent's identity.
 
-The agent-ready front door asks the customer to approve the agent through Descope
+The Agent Edge front door asks the customer to approve the agent through Descope
 CIBA, then puts the Descope access token in a `DS` cookie in the agent's browser.
 
-**Northbound's change is accepting that token and honoring its limit:**
+**Northbound's change is accepting that token, and asking for approval before an agent buys:**
 
 - [`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks the token against
   the Descope inbound app, and [`lib/auth/session-cookie.ts`](lib/auth/session-cookie.ts)
   uses it to sign the agent in as the customer with the same email. A customer's own
   session always wins.
-- [`app/checkout/actions.ts`](app/checkout/actions.ts) rejects an agent's order above the
-  limit in the token's `authorization_details`, and refuses orders from agents whose token
-  has no purchase limit. The customer's own orders aren't limited.
+- Agents connect read-only (`orders:read`). At checkout,
+  [`lib/agentSession/stepUp.ts`](lib/agentSession/stepUp.ts) sends an agent without
+  `orders:write` to the front door with a signed description of the order. The customer
+  approves that order through Descope, the agent comes back with a token that allows it,
+  and checkout goes through. Three lines in `app/checkout/actions.ts` call it.
 
-Until Descope supports Rich Authorization Requests, the limit is fixed for each agent
-tier: the tier's inbound app adds the claim, and the front door shows the same limit in
-the approval message. The check is per order; the 7-day `period` isn't tracked yet.
+The boundary test keeps agent code confined to `lib/agentSession/` and those two call sites.
 
 ### Run it
 
 1. In Descope, create users with the seeded emails (`alice@example.com` and so
    on), and an inbound app with CIBA turned on whose tokens include `email`, `act`,
-   and, for agents allowed to buy, a purchase limit:
-
-   ```json
-   "authorization_details": [{ "type": "purchase", "max_amount": { "value": "200.00", "currency": "USD" }, "period": "P7D" }]
-   ```
-2. Set `DESCOPE_DISCOVERY_URL` in `.env.local` to the inbound app's Discovery
-   URL, then `pnpm dev` (port 3000).
-3. Start the [demo front door](https://github.com/descope/agent-ready/tree/main/demo/front-door)
+   and the `orders:read` or `orders:write` scope. Keep `orders:write` tokens short-lived,
+   so one approval covers about one purchase.
+2. In `.env.local`, set `DESCOPE_DISCOVERY_URL` to the inbound app's Discovery URL,
+   `FRONT_DOOR_URL` to the front door, and `STEP_UP_SECRET` to the same value as the
+   front door's. Then `pnpm dev` (port 3000).
+3. Start the [Agent Edge front door](https://github.com/descope/agent-edge/tree/main/front-door)
    on port 8788, with `COOKIE_DOMAIN` unset.
 4. Start the Worker in front of Northbound:
 
    ```bash
-   cd agent-ready/cloudflare
+   cd agent-edge/cloudflare
    npx wrangler dev --var UPSTREAM_ORIGIN:http://localhost:3000 --var MODE:route \
      --var FRONT_DOOR_URL:http://localhost:8788 --var LOGIN_PATHS:/login \
      --var BLOCKED_AGENT_PATHS:"/account/payment-methods*" --var SITE_NAME:Northbound \
