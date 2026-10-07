@@ -185,6 +185,9 @@ describe('step-up for agent purchases', () => {
     jar.set('DS', await token({ scope: 'openid orders:write' }));
     const { form } = await checkoutForm('cascade-45l');
     expect(await placeOrder(form)).toMatch(/^redirect:\/checkout\/confirmation\//);
+
+    const { listOrders } = await import('@/lib/services/orders');
+    expect((await listOrders(82731))[0].placedByAgent).toBe('agt_abc');
   });
 
   it("doesn't change checkout for the customer", async () => {
@@ -192,6 +195,9 @@ describe('step-up for agent purchases', () => {
     jar.set('nb_session', await createSession(82731));
     const { form } = await checkoutForm('cascade-45l');
     expect(await placeOrder(form)).toMatch(/^redirect:\/checkout\/confirmation\//);
+
+    const { listOrders } = await import('@/lib/services/orders');
+    expect((await listOrders(82731))[0].placedByAgent).toBeNull();
   });
 });
 

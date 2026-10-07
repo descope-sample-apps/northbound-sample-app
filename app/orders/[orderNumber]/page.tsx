@@ -33,6 +33,7 @@ export default async function OrderDetailPage({
         <h1 className="display text-3xl tabular-nums">Order #{order.orderNumber}</h1>
         <span className="text-sm text-muted">
           {dateFormat.format(order.placedAt)} · {order.status}
+          {order.placedByAgent && ' · placed by your AI assistant'}
         </span>
       </div>
 
