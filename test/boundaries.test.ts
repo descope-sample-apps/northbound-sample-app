@@ -31,16 +31,9 @@ const STOREFRONT_DIRS = ['app', 'lib', 'components'];
 const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
 
 /**
- * The Poppy discovery document. In production Agent Edge's Worker serves this —
- * see the comment at the top of lib/agentSession/descope.ts — so the store does not
- * have to. It is served here anyway, deliberately, as the sample implementation of
- * what that Worker publishes, for anyone reading this repo to learn the shape from.
- *
- * It is the one exception to the two rules below, and it is narrow on purpose: a
- * single static document, no agent token ever reaches it, and it imports nothing
- * from AGENT_DIR. The word it trips the vocabulary scan on is `scopes`, which the
- * Poppy schema requires as a key name. Widen this no further without the same
- * argument — the value of these rules is that exceptions are listed, not assumed.
+ * The Poppy discovery document: in production Agent Edge's Worker serves it, and this
+ * is the sample implementation of what it publishes. The one exception to the two rules
+ * below — it trips the vocabulary scan on `scopes`, a key name the Poppy schema requires.
  */
 const POPPY_ROUTE = join('app', '.well-known', 'poppy.json', 'route.ts');
 
