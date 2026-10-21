@@ -31,6 +31,20 @@ const STOREFRONT_DIRS = ['app', 'lib', 'components'];
 const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
 
 /**
+ * The Poppy discovery document. In production Agent Edge's Worker serves this —
+ * see the comment at the top of lib/agentSession/descope.ts — so the store does not
+ * have to. It is served here anyway, deliberately, as the sample implementation of
+ * what that Worker publishes, for anyone reading this repo to learn the shape from.
+ *
+ * It is the one exception to the two rules below, and it is narrow on purpose: a
+ * single static document, no agent token ever reaches it, and it imports nothing
+ * from AGENT_DIR. The word it trips the vocabulary scan on is `scopes`, which the
+ * Poppy schema requires as a key name. Widen this no further without the same
+ * argument — the value of these rules is that exceptions are listed, not assumed.
+ */
+const POPPY_ROUTE = join('app', '.well-known', 'poppy.json', 'route.ts');
+
+/**
  * THE GRAFT. Agent access arrives through Agent Edge's Cloudflare Worker and front
  * door, which hand the agent's browser a Descope token in a cookie. Everything else
  * an agent needs happens at the edge, so all of Northbound's agent code is token
@@ -67,6 +81,7 @@ describe('sub-project A contains no agent concepts', () => {
 
     for (const file of STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))) {
       if (file === LEGACY_ROUTE) continue;
+      if (file === POPPY_ROUTE) continue;
       if (file.startsWith(AGENT_DIR)) continue;
 
       const code = stripComments(readFileSync(file, 'utf8'));
@@ -79,10 +94,19 @@ describe('sub-project A contains no agent concepts', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('exposes exactly one HTTP route, and it is not under /api', () => {
-    const routes = sourceFiles('app').filter((f) => /route\.tsx?$/.test(f));
-    expect(routes).toEqual([join('app', 'legacy-auth', 'verify', 'route.ts')]);
+  it('exposes only the two routes the spec names, and none under /api', () => {
+    const routes = sourceFiles('app').filter((f) => /route\.tsx?$/.test(f)).sort();
+    expect(routes).toEqual([POPPY_ROUTE, LEGACY_ROUTE].sort());
     expect(existsSync(join('app', 'api'))).toBe(false);
+  });
+
+  // The discovery document is a published file, not an entry point: it reads one
+  // environment variable and returns JSON. If it ever imports the agent code, it has
+  // stopped being a document and this rule should start failing again.
+  it('serves the discovery document without reaching into the agent code', () => {
+    const code = stripComments(readFileSync(POPPY_ROUTE, 'utf8'));
+    expect(code).not.toMatch(/@\/lib\/agentSession\//);
+    expect(code).not.toMatch(/\bdb\b|drizzle/);
   });
 });
 
