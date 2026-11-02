@@ -4,6 +4,7 @@ import { db } from '@/db/client';
 import { carts, cartItems, products } from '@/db/schema';
 import { calcTotals } from '@/lib/money';
 import { NotFoundError, OutOfStockError, ValidationError } from './errors';
+import { withWriteLock } from './writeLock';
 
 export type CartLine = {
   productId: number;
@@ -41,43 +42,52 @@ function parseQuantity(quantity: number): number {
   return parsed.data;
 }
 
-// Every function below takes customerId first and scopes its writes through
-// this lookup. That is what makes it impossible for one customer to touch
-// another's cart, and it is the same shape the agent API will inherit.
-async function getOrCreateCart(customerId: number) {
-  const [existing] = await db
-    .select()
-    .from(carts)
-    .where(eq(carts.customerId, customerId))
-    .limit(1);
+/**
+ * Who a cart belongs to: a signed-in customer, or a browser that has not signed
+ * in. Every function below takes one and scopes its writes through the lookup it
+ * drives, which is what makes it impossible for one owner to touch another's cart.
+ */
+export type CartOwner = { customerId: number } | { token: string };
+
+function ownerMatch(owner: CartOwner) {
+  return 'customerId' in owner ? eq(carts.customerId, owner.customerId) : eq(carts.token, owner.token);
+}
+
+async function getOrCreateCart(owner: CartOwner) {
+  const match = ownerMatch(owner);
+  const [existing] = await db.select().from(carts).where(match).limit(1);
 
   if (existing) return existing;
 
-  // Upsert rather than read-then-insert. `carts.customer_id` is UNIQUE, and a
-  // customer's first authenticated page load makes two simultaneous calls here:
-  // the root layout's Nav reads the cart at the same time as the page body. A
-  // plain insert loses that race with a constraint violation on an empty cart.
+  // Upsert rather than read-then-insert. Both owner columns are UNIQUE, and a
+  // first page load makes two simultaneous calls here: the root layout's Nav
+  // reads the cart at the same time as the page body. A plain insert loses that
+  // race with a constraint violation on an empty cart.
   const now = new Date();
   await db
     .insert(carts)
-    .values({ customerId, createdAt: now, updatedAt: now })
-    .onConflictDoNothing({ target: carts.customerId });
+    .values({ ...owner, createdAt: now, updatedAt: now })
+    .onConflictDoNothing({ target: 'customerId' in owner ? carts.customerId : carts.token });
 
-  const [cart] = await db
-    .select()
-    .from(carts)
-    .where(eq(carts.customerId, customerId))
-    .limit(1);
+  const [cart] = await db.select().from(carts).where(match).limit(1);
 
   return cart;
 }
+
+const EMPTY_CART: CartView = { items: [], ...calcTotals(0) };
 
 async function touch(cartId: number) {
   await db.update(carts).set({ updatedAt: new Date() }).where(eq(carts.id, cartId));
 }
 
-export async function getCart(customerId: number): Promise<CartView> {
-  const cart = await getOrCreateCart(customerId);
+/**
+ * A null owner is a visitor who has neither signed in nor put anything in a cart
+ * yet. They get the empty view and no row is written, so browsing costs nothing.
+ */
+export async function getCart(owner: CartOwner | null): Promise<CartView> {
+  if (!owner) return EMPTY_CART;
+
+  const cart = await getOrCreateCart(owner);
 
   const rows = await db
     .select({ item: cartItems, product: products })
@@ -105,7 +115,7 @@ export async function getCart(customerId: number): Promise<CartView> {
 }
 
 export async function addToCart(
-  customerId: number,
+  owner: CartOwner,
   productId: number,
   quantity: number,
 ): Promise<void> {
@@ -119,7 +129,7 @@ export async function addToCart(
 
   if (!product) throw new NotFoundError('Product');
 
-  const cart = await getOrCreateCart(customerId);
+  const cart = await getOrCreateCart(owner);
 
   const [existing] = await db
     .select()
@@ -148,11 +158,11 @@ export async function addToCart(
 }
 
 export async function updateCartItem(
-  customerId: number,
+  owner: CartOwner,
   productId: number,
   quantity: number,
 ): Promise<void> {
-  if (quantity === 0) return removeFromCart(customerId, productId);
+  if (quantity === 0) return removeFromCart(owner, productId);
 
   const qty = parseQuantity(quantity);
 
@@ -165,7 +175,7 @@ export async function updateCartItem(
   if (!product) throw new NotFoundError('Product');
   if (qty > product.stockQty) throw new OutOfStockError(product.name, product.stockQty);
 
-  const cart = await getOrCreateCart(customerId);
+  const cart = await getOrCreateCart(owner);
 
   await db
     .update(cartItems)
@@ -175,8 +185,8 @@ export async function updateCartItem(
   await touch(cart.id);
 }
 
-export async function removeFromCart(customerId: number, productId: number): Promise<void> {
-  const cart = await getOrCreateCart(customerId);
+export async function removeFromCart(owner: CartOwner, productId: number): Promise<void> {
+  const cart = await getOrCreateCart(owner);
 
   await db
     .delete(cartItems)
@@ -185,8 +195,69 @@ export async function removeFromCart(customerId: number, productId: number): Pro
   await touch(cart.id);
 }
 
-export async function clearCart(customerId: number): Promise<void> {
-  const cart = await getOrCreateCart(customerId);
+/**
+ * Moves a guest cart onto a customer at sign-in, then deletes it.
+ *
+ * Best effort on purpose. This runs inside sign-in, and a line that went out of
+ * stock while the cart sat in a browser must not stop someone signing in: it is
+ * capped at what is left, or dropped when nothing is. The alternative — refusing
+ * the sign-in, or throwing away the whole cart over one line — is worse in both
+ * directions.
+ *
+ * Quantities add rather than replace, so a product in both carts ends up with
+ * the sum, bounded by stock and by the per-line maximum.
+ */
+export async function adoptGuestCart(token: string, customerId: number): Promise<void> {
+  return withWriteLock(async () => {
+    const [guest] = await db.select().from(carts).where(eq(carts.token, token)).limit(1);
+    if (!guest) return;
+
+    const lines = await db
+      .select({ item: cartItems, product: products })
+      .from(cartItems)
+      .innerJoin(products, eq(cartItems.productId, products.id))
+      .where(eq(cartItems.cartId, guest.id))
+      .orderBy(cartItems.id);
+
+    if (lines.length > 0) {
+      const mine = await getOrCreateCart({ customerId });
+
+      for (const { item, product } of lines) {
+        if (!product.isActive) continue;
+
+        const [existing] = await db
+          .select()
+          .from(cartItems)
+          .where(and(eq(cartItems.cartId, mine.id), eq(cartItems.productId, product.id)))
+          .limit(1);
+
+        const desired = Math.min(
+          (existing?.quantity ?? 0) + item.quantity,
+          product.stockQty,
+          MAX_QTY_PER_LINE,
+        );
+
+        if (desired <= 0) continue;
+
+        if (existing) {
+          if (desired !== existing.quantity) {
+            await db.update(cartItems).set({ quantity: desired }).where(eq(cartItems.id, existing.id));
+          }
+        } else {
+          await db.insert(cartItems).values({ cartId: mine.id, productId: product.id, quantity: desired });
+        }
+      }
+
+      await touch(mine.id);
+    }
+
+    await db.delete(cartItems).where(eq(cartItems.cartId, guest.id));
+    await db.delete(carts).where(eq(carts.id, guest.id));
+  });
+}
+
+export async function clearCart(owner: CartOwner): Promise<void> {
+  const cart = await getOrCreateCart(owner);
   await db.delete(cartItems).where(eq(cartItems.cartId, cart.id));
   await touch(cart.id);
 }

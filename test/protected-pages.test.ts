@@ -21,11 +21,19 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
  * not that today's /orders stops checking, it is that tomorrow's /orders/invoices
  * never starts. A rule over the directory catches the page nobody wrote yet.
  */
-const PROTECTED_ROOTS = ['account', 'cart', 'checkout', 'orders'];
+const PROTECTED_ROOTS = ['account', 'checkout', 'orders'];
+
+/**
+ * The cart is deliberately NOT in that list. Browsing and filling a cart needs no
+ * account — a guest cart is keyed by a cookie, and it is adopted onto the account
+ * at sign-in. The gate moves to /checkout, where an order needs a customer to
+ * belong to, rather than disappearing.
+ */
 
 /** Browsing the catalogue requires no one. Gating these would be a different store. */
 const PUBLIC_PAGES = [
   join('app', 'page.tsx'),
+  join('app', 'cart', 'page.tsx'),
   join('app', 'product', '[slug]', 'page.tsx'),
   join('app', 'shop', 'page.tsx'),
   join('app', 'shop', '[category]', 'page.tsx'),
@@ -64,7 +72,6 @@ describe('pages that need someone signed in', () => {
       join('app', 'account', 'addresses', 'page.tsx'),
       join('app', 'account', 'page.tsx'),
       join('app', 'account', 'payment-methods', 'page.tsx'),
-      join('app', 'cart', 'page.tsx'),
       join('app', 'checkout', 'confirmation', '[orderNumber]', 'page.tsx'),
       join('app', 'checkout', 'page.tsx'),
       join('app', 'orders', '[orderNumber]', 'page.tsx'),

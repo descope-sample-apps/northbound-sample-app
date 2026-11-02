@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireCustomer } from '@/lib/auth/session-cookie';
+import { requireCartOwner } from '@/lib/cart/owner';
 import { addToCart } from '@/lib/services/cart';
 import { ServiceError } from '@/lib/services/errors';
 
@@ -18,14 +18,14 @@ export async function addToCartAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const customer = await requireCustomer();
+  const owner = await requireCartOwner();
 
   const productId = Number(formData.get('productId'));
   const quantity = Number(formData.get('quantity') ?? 1);
   const slug = String(formData.get('slug') ?? '');
 
   try {
-    await addToCart(customer.id, productId, quantity);
+    await addToCart(owner, productId, quantity);
   } catch (error) {
     if (error instanceof ServiceError) return { error: error.message };
     throw error;

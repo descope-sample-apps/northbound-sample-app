@@ -3,9 +3,18 @@ import { customers } from './customers';
 import { products } from './catalog';
 import { addresses, paymentMethods } from './account';
 
+// A cart belongs to a customer OR to a browser that has not signed in — exactly
+// one of the two columns is set. Both are UNIQUE, and SQLite allows any number of
+// NULLs in a UNIQUE column, so one customer still has at most one cart and one
+// guest token still has at most one cart.
+//
+// The guest row is created only when something is added. A visitor who browses
+// and leaves writes nothing, which is also why there is no sweeper here: carts
+// that are abandoned are the ones that were real enough to put a product in.
 export const carts = sqliteTable('carts', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  customerId: integer('customer_id').notNull().references(() => customers.id).unique(),
+  customerId: integer('customer_id').references(() => customers.id).unique(),
+  token: text('token').unique(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });

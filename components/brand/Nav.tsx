@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getCurrentCustomer } from '@/lib/auth/session-cookie';
+import { readCartOwner } from '@/lib/cart/owner';
 import { getCart } from '@/lib/services/cart';
 import { logoutAction } from '@/app/login/actions';
 
@@ -20,8 +21,8 @@ const linkClass =
  */
 export async function Nav() {
   const customer = await getCurrentCustomer();
-  const cart = customer ? await getCart(customer.id) : null;
-  const itemCount = cart?.items.reduce((total, line) => total + line.quantity, 0) ?? 0;
+  const cart = await getCart(await readCartOwner());
+  const itemCount = cart.items.reduce((total, line) => total + line.quantity, 0);
 
   return (
     <header className="border-b-2 border-ink bg-paper">
