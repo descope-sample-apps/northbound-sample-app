@@ -1,12 +1,11 @@
 import { ButtonLink } from '@/components/brand/Button';
 import { CartLines } from '@/components/brand/CartLines';
 import { OrderSummary } from '@/components/brand/OrderSummary';
-import { requireCustomer } from '@/lib/auth/session-cookie';
+import { readCartOwner } from '@/lib/cart/owner';
 import { getCart } from '@/lib/services/cart';
 
 export default async function CartPage() {
-  const customer = await requireCustomer();
-  const cart = await getCart(customer.id);
+  const cart = await getCart(await readCartOwner());
 
   if (cart.items.length === 0) {
     return (

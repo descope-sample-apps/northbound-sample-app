@@ -14,7 +14,7 @@ export async function requireOrderApproval(customer: Customer): Promise<{ error:
   const agent = await getAgentSession();
   if (!agent || agent.scopes.includes('orders:write')) return undefined;
 
-  const { totalCents } = await getCart(customer.id);
+  const { totalCents } = await getCart({ customerId: customer.id });
   const origin = (await headers()).get('origin') ?? '';
   const approval = stepUpUrl(customer.email, totalCents, `${origin}/checkout`);
   if (!approval) return { error: "This AI agent needs the customer's approval to place orders." };
