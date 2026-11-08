@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { customers, type Customer } from '@/db/schema';
 import { createDemoCustomer } from './demoSignup';
+import { recordAgentVisit } from './knownAgents';
 
 /**
  * THE GRAFT: Northbound's only agent code.
@@ -69,7 +70,13 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const customer = existing ?? (process.env.DEMO_AUTO_SIGNUP === 'true'
       ? await createDemoCustomer(payload.email, typeof payload.name === 'string' ? payload.name : undefined)
       : undefined);
-    return customer ? { customer, agent, scopes } : null;
+    if (!customer) return null;
+
+    // Only once the token has fully passed. Recording a rejected token would let
+    // anyone with a forged JWT write rows into a customer's list of assistants.
+    await recordAgentVisit(customer.id, agent, scopes);
+
+    return { customer, agent, scopes };
   } catch (error) {
     console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));
     return null;
