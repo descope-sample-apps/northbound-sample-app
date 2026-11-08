@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireCustomer } from '@/lib/auth/session-cookie';
+import { refuseAgentAccountChange } from '@/lib/agentSession/accountChanges';
 import { ServiceError } from '@/lib/services/errors';
 import { updateProfile } from '@/lib/services/profile';
 import {
@@ -14,8 +15,14 @@ import {
 export type AccountState = { error?: string; saved?: boolean };
 
 /**
- * Every action here follows the same three steps: resolve the session, call the
- * service with the customer's own id, translate a ServiceError into a message.
+ * Every action here follows the same steps: resolve the session, refuse an AI
+ * assistant, call the service with the customer's own id, translate a ServiceError
+ * into a message.
+ *
+ * The refusal is here rather than in each action because every function in this file
+ * writes account data, and a gate that has to be remembered seven times is a gate
+ * that will be missed once. See lib/agentSession/accountChanges.ts for why the answer
+ * is no rather than a scope check.
  *
  * None of them validate. Validation lives in the services, so the rules are the
  * same for these forms and for every future caller of the same functions.
@@ -25,6 +32,9 @@ async function run(
   paths: string[],
 ): Promise<AccountState> {
   const customer = await requireCustomer();
+
+  const refusal = await refuseAgentAccountChange();
+  if (refusal) return refusal;
 
   try {
     await work(customer.id);

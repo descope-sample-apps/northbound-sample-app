@@ -45,8 +45,20 @@ const POPPY_ROUTE = join('app', '.well-known', 'poppy.json', 'route.ts');
  */
 const AGENT_DIR = join('lib', 'agentSession');
 
-/** The only storefront files that import the agent code: the session lookup, checkout's step-up, and login's External Authentication. */
+/**
+ * The only storefront files that import the agent code: the session lookup, checkout's
+ * step-up, login's External Authentication, the account write gate, and the page that
+ * shows a customer which assistants have acted for them.
+ *
+ * The last two widen the graft, and that is the point of listing them. An assistant is
+ * no longer only something the edge deals with before a request arrives — a customer
+ * can now see one in their own account, and the store refuses one that tries to change
+ * account data. Both are storefront features, so they belong in storefront files, and
+ * this list is what keeps that growth visible in a diff rather than ambient.
+ */
 const AGENT_AWARE_FILES = [
+  join('app', 'account', 'actions.ts'),
+  join('app', 'account', 'assistants', 'page.tsx'),
   join('app', 'checkout', 'actions.ts'),
   join('app', 'login', 'actions.ts'),
   join('app', 'login', 'page.tsx'),

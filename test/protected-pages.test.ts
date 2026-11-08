@@ -70,6 +70,7 @@ describe('pages that need someone signed in', () => {
     // above, and the rule quietly stopped covering it.
     expect(pages).toEqual([
       join('app', 'account', 'addresses', 'page.tsx'),
+      join('app', 'account', 'assistants', 'page.tsx'),
       join('app', 'account', 'page.tsx'),
       join('app', 'account', 'payment-methods', 'page.tsx'),
       join('app', 'checkout', 'confirmation', '[orderNumber]', 'page.tsx'),
