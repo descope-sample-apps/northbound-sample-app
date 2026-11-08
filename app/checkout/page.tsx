@@ -11,7 +11,7 @@ export default async function CheckoutPage() {
   const customer = await requireCustomer();
 
   const [cart, addresses, paymentMethods] = await Promise.all([
-    getCart(customer.id),
+    getCart({ customerId: customer.id }),
     listAddresses(customer.id),
     listPaymentMethods(customer.id),
   ]);

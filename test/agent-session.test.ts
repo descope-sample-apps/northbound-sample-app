@@ -141,14 +141,14 @@ describe('step-up for agent purchases', () => {
     const { eq } = await import('drizzle-orm');
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { getProductBySlug } = await import('@/lib/services/catalog');
-    await addToCart(82731, (await getProductBySlug(slug)).id, 1);
+    await addToCart({ customerId: 82731 }, (await getProductBySlug(slug)).id, 1);
     const [address] = await tdb.db.select().from(schema.addresses).where(eq(schema.addresses.customerId, 82731));
     const [card] = await tdb.db.select().from(schema.paymentMethods).where(eq(schema.paymentMethods.customerId, 82731));
     const form = new FormData();
     form.set('addressId', String(address.id));
     form.set('paymentMethodId', String(card.id));
-    form.set('expectedTotalCents', String((await getCart(82731)).totalCents));
-    return { form, totalCents: (await getCart(82731)).totalCents };
+    form.set('expectedTotalCents', String((await getCart({ customerId: 82731 })).totalCents));
+    return { form, totalCents: (await getCart({ customerId: 82731 })).totalCents };
   }
 
   async function placeOrder(form: FormData): Promise<string> {

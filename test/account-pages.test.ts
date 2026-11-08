@@ -57,7 +57,7 @@ describe('order detail route params', () => {
     const [card] = await tdb.db.select().from(schema.paymentMethods)
       .where(eq(schema.paymentMethods.customerId, ids.alice));
 
-    await addToCart(ids.alice, ids.productIds[2], 1);
+    await addToCart({ customerId: ids.alice }, ids.productIds[2], 1);
     const order = await placeOrder(ids.alice, {
       addressId: address.id, paymentMethodId: card.id,
     });
