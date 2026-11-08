@@ -21,6 +21,12 @@ export type AgentSession = {
   customer: Customer;
   /** Which agent is acting for the customer: the token's act.sub. */
   agent: string;
+  /**
+   * The email the token names. The customer was matched on it, so it is the same
+   * address, but this is the one the token actually carries — what an interface
+   * showing "acting for …" should say.
+   */
+  email: string;
   /** What the customer allowed it to do, from the token's scope claim. */
   scopes: string[];
 };
@@ -69,7 +75,7 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const customer = existing ?? (process.env.DEMO_AUTO_SIGNUP === 'true'
       ? await createDemoCustomer(payload.email, typeof payload.name === 'string' ? payload.name : undefined)
       : undefined);
-    return customer ? { customer, agent, scopes } : null;
+    return customer ? { customer, agent, email: payload.email, scopes } : null;
   } catch (error) {
     console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));
     return null;
