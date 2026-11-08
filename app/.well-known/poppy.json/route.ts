@@ -1,4 +1,4 @@
-// Northbound's Poppy discovery document, draft 0.3.
+// Northbound's Poppy discovery document, draft 0.4.
 //
 // A route rather than a file in public/, so the issuer comes from configuration
 // instead of being committed.
@@ -8,31 +8,35 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 /**
- * Draft 0.3 of the Personal Agent Protocol:
- * https://personalagentprotocol.org/docs/0.3/spec
+ * Draft 0.4 of the Personal Agent Protocol:
+ * https://personalagentprotocol.org/docs/0.4/spec
  *
- * The version is load-bearing. Before 1.0 each draft may break the one before it, so
- * §3.1 tells a Personal Agent it MUST NOT use a document whose major.minor it doesn't
- * support. A stale `protocol_version` isn't a document an agent tolerates — it's one
- * it refuses.
+ * The version is load-bearing. Before 1.0, two versions are compatible only when their
+ * major AND minor match (§3.4), so an agent that speaks 0.4 doesn't downgrade to a 0.3
+ * document — it declines to use it. A stale `protocol_version` isn't a document an
+ * agent tolerates, it's one it refuses.
+ *
+ * 0.4 adds `supported_versions` for serving older drafts alongside this one, each at
+ * its own URL on this host. Northbound serves one version; a store with agents already
+ * integrated would add it rather than cut them off on a draft bump.
  */
 export async function GET() {
   return NextResponse.json({
-    protocol_version: '0.3',
+    protocol_version: '0.4',
     organization: {
       name: 'Northbound',
       domain: 'northbound.camp',
     },
     auth: {
-      // Optional in 0.3, and omitted unless configured. The issuer is normally read from
-      // /.well-known/oauth-protected-resource, which 0.3 §3.2 makes the source of truth:
+      // Optional, and omitted unless configured. The issuer is normally read from
+      // /.well-known/oauth-protected-resource, which §3.2 makes the source of truth:
       // with one authorization server listed there, that server IS the issuer and naming
       // it again here is redundant. Set POPPY_ISSUER only to pick among several — and
       // then it MUST be one of them, character for character.
       ...(process.env.POPPY_ISSUER ? { issuer: process.env.POPPY_ISSUER } : {}),
 
       // What the customer is agreeing to when they approve an agent. Northbound has no
-      // OpenAPI description for an agent to read these from, which is the case 0.3 §4.7
+      // OpenAPI description for an agent to read these from, which is the case §4.7
       // recommends auth.scopes for. They are the two scopes lib/agentSession/descope.ts
       // accepts; a token with neither doesn't sign an agent in.
       scopes: {
@@ -47,9 +51,12 @@ export async function GET() {
       },
     },
 
-    // Northbound is a website, and 0.3 requires at least one of `agent`, `apis` or `web`.
-    // No browser_session_endpoint: Northbound doesn't implement §6 browser join, so an
-    // agent's browser arrives as an ordinary visitor and signs in through Agent Edge.
+    // A website, and §3.1 requires at least one of `agent`, `apis` or `web`.
+    //
+    // No `browser_session_endpoint`: Northbound doesn't implement §6 browser join. Its
+    // agents reach the site through Agent Edge's own cookie instead, which is why there
+    // is no `poppy:browser-sign-in` scope above — 0.4 ties that scope to this endpoint,
+    // and a Personal Agent only requests it from a store that lists one.
     web: {},
   });
 }

@@ -24,11 +24,12 @@ async function document() {
 }
 
 describe('GET /.well-known/poppy.json', () => {
-  // The version an agent checks first. A document on an older draft isn't read and
-  // ignored, it's refused outright (0.3 §3.1), so this assertion is the whole file.
-  it('serves a draft 0.3 document', async () => {
+  // The version an agent checks first. Pre-1.0, compatibility needs an exact
+  // major.minor match (§3.4), so a document on an older draft isn't read and ignored,
+  // it's refused outright. That makes this assertion the whole file.
+  it('serves a draft 0.4 document', async () => {
     expect(await document()).toEqual({
-      protocol_version: '0.3',
+      protocol_version: '0.4',
       organization: { name: 'Northbound', domain: 'northbound.camp' },
       auth: {
         scopes: {
@@ -44,7 +45,7 @@ describe('GET /.well-known/poppy.json', () => {
     });
   });
 
-  // 0.3 moved the issuer to /.well-known/oauth-protected-resource. Unconfigured, the
+  // The issuer lives in /.well-known/oauth-protected-resource. Unconfigured, the
   // document is still complete, which is why this no longer 404s the way 0.1's did.
   it('leaves the issuer out when POPPY_ISSUER is unset', async () => {
     const doc = await document();
