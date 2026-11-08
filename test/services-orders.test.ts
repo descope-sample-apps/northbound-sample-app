@@ -36,7 +36,7 @@ describe('placeOrder', () => {
   it('places an order, snapshots names and prices, and clears the cart', async () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 2);
+    await addToCart({ customerId: ids.alice }, pack(), 2);
 
     const order = await placeOrder(ids.alice, await defaultsFor(ids.alice));
 
@@ -52,13 +52,13 @@ describe('placeOrder', () => {
     expect(items[0].unitPriceCents).toBe(42_000);
     expect(items[0].lineTotalCents).toBe(84_000);
 
-    expect((await getCart(ids.alice)).items).toEqual([]);
+    expect((await getCart({ customerId: ids.alice })).items).toEqual([]);
   });
 
   it('numbers the first order 10241', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
     expect((await placeOrder(ids.alice, await defaultsFor(ids.alice))).orderNumber)
       .toBe(10_241);
   });
@@ -66,9 +66,9 @@ describe('placeOrder', () => {
   it('increments the order number for the next order', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
     await placeOrder(ids.alice, await defaultsFor(ids.alice));
-    await addToCart(ids.carol, mug(), 1);
+    await addToCart({ customerId: ids.carol }, mug(), 1);
     expect((await placeOrder(ids.carol, await defaultsFor(ids.carol))).orderNumber)
       .toBe(10_242);
   });
@@ -76,7 +76,7 @@ describe('placeOrder', () => {
   it('decrements stock by the ordered quantity', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 3);
+    await addToCart({ customerId: ids.alice }, pack(), 3);
     await placeOrder(ids.alice, await defaultsFor(ids.alice));
     const [product] = await tdb.db.select().from(schema.products)
       .where(eq(schema.products.id, pack()));
@@ -94,7 +94,7 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { OwnershipError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
     const carol = await defaultsFor(ids.carol);
     const alice = await defaultsFor(ids.alice);
     await expect(placeOrder(ids.alice, {
@@ -106,7 +106,7 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { OwnershipError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
     const carol = await defaultsFor(ids.carol);
     const alice = await defaultsFor(ids.alice);
     await expect(placeOrder(ids.alice, {
@@ -119,7 +119,7 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { ValidationError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, pack(), 1);
+    await addToCart({ customerId: ids.alice }, pack(), 1);
     await tdb.db.update(schema.products).set({ isActive: false })
       .where(eq(schema.products.id, pack()));
 
@@ -133,7 +133,7 @@ describe('placeOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { OutOfStockError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, pack(), 5);
+    await addToCart({ customerId: ids.alice }, pack(), 5);
     await tdb.db.update(schema.products).set({ stockQty: 2 })
       .where(eq(schema.products.id, pack()));
 
@@ -147,8 +147,8 @@ describe('placeOrder', () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
     const { PriceChangedError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, pack(), 1);
-    const shown = (await getCart(ids.alice)).totalCents;
+    await addToCart({ customerId: ids.alice }, pack(), 1);
+    const shown = (await getCart({ customerId: ids.alice })).totalCents;
 
     await tdb.db.update(schema.products).set({ priceCents: 50_000 })
       .where(eq(schema.products.id, pack()));
@@ -161,8 +161,8 @@ describe('placeOrder', () => {
   it('accepts a matching expected total', async () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 1);
-    const shown = (await getCart(ids.alice)).totalCents;
+    await addToCart({ customerId: ids.alice }, pack(), 1);
+    const shown = (await getCart({ customerId: ids.alice })).totalCents;
     const order = await placeOrder(ids.alice, {
       ...(await defaultsFor(ids.alice)), expectedTotalCents: shown,
     });
@@ -172,7 +172,7 @@ describe('placeOrder', () => {
   it('leaves the cart intact when checkout fails', async () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, pack(), 1);
+    await addToCart({ customerId: ids.alice }, pack(), 1);
     await tdb.db.update(schema.products).set({ stockQty: 0 })
       .where(eq(schema.products.id, pack()));
 
@@ -180,15 +180,15 @@ describe('placeOrder', () => {
 
     expect(await tdb.db.select().from(schema.orders)).toHaveLength(0);
     expect(await tdb.db.select().from(schema.orderItems)).toHaveLength(0);
-    expect((await getCart(ids.alice)).items).toHaveLength(1);
+    expect((await getCart({ customerId: ids.alice })).items).toHaveLength(1);
   });
 
   // REVIEW FOCUS 1: concurrent checkout must not oversell or duplicate a number.
   it('does not oversell the last unit under concurrent checkout', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, shell(), 1);
-    await addToCart(ids.carol, shell(), 1);
+    await addToCart({ customerId: ids.alice }, shell(), 1);
+    await addToCart({ customerId: ids.carol }, shell(), 1);
 
     const aliceDefaults = await defaultsFor(ids.alice);
     const carolDefaults = await defaultsFor(ids.carol);
@@ -208,9 +208,9 @@ describe('placeOrder', () => {
   it('never issues the same order number twice under concurrency', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 1);
-    await addToCart(ids.carol, mug(), 1);
-    await addToCart(ids.bob, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
+    await addToCart({ customerId: ids.carol }, mug(), 1);
+    await addToCart({ customerId: ids.bob }, mug(), 1);
 
     const all = await Promise.all([
       defaultsFor(ids.alice), defaultsFor(ids.carol), defaultsFor(ids.bob),
@@ -231,9 +231,9 @@ describe('listOrders and getOrder', () => {
   it('lists only the requesting customer\'s orders with an item count', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, listOrders } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 2);
+    await addToCart({ customerId: ids.alice }, mug(), 2);
     await placeOrder(ids.alice, await defaultsFor(ids.alice));
-    await addToCart(ids.carol, mug(), 1);
+    await addToCart({ customerId: ids.carol }, mug(), 1);
     await placeOrder(ids.carol, await defaultsFor(ids.carol));
 
     const alice = await listOrders(ids.alice);
@@ -244,7 +244,7 @@ describe('listOrders and getOrder', () => {
   it('returns full order detail for the owner', async () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
-    await addToCart(ids.alice, mug(), 2);
+    await addToCart({ customerId: ids.alice }, mug(), 2);
     const placed = await placeOrder(ids.alice, await defaultsFor(ids.alice));
 
     const detail = await getOrder(ids.alice, placed.orderNumber);
@@ -258,7 +258,7 @@ describe('listOrders and getOrder', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
     const { NotFoundError } = await import('@/lib/services/errors');
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
     const placed = await placeOrder(ids.alice, await defaultsFor(ids.alice));
 
     await expect(getOrder(ids.carol, placed.orderNumber))

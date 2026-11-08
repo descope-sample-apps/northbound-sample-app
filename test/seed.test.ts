@@ -86,7 +86,7 @@ describe('full seed', () => {
       .where(eq(schema.paymentMethods.customerId, 82731));
     const [product] = await tdb.db.select().from(schema.products).limit(1);
 
-    await addToCart(82731, product.id, 1);
+    await addToCart({ customerId: 82731 }, product.id, 1);
     const order = await placeOrder(82731, {
       addressId: address.id, paymentMethodId: card.id,
     });
