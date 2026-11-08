@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { verifyCredentials } from '@/lib/auth/verify';
 import { createSession, revokeSession, SESSION_COOKIE } from '@/lib/auth/session';
 import { clearSessionCookie, setSessionCookie } from '@/lib/auth/session-cookie';
+import { handOverGuestCart } from '@/lib/cart/owner';
 import { completeExternalAuth, externalAuthRequestId } from '@/lib/agentSession/externalAuth';
 
 export type LoginState = { error?: string };
@@ -42,6 +43,9 @@ export async function loginAction(
 
   const userAgent = (await headers()).get('user-agent') ?? undefined;
   await setSessionCookie(await createSession(result.customerId, userAgent));
+
+  // Whatever they put in the cart before signing in is theirs now.
+  await handOverGuestCart(result.customerId);
 
   // Optional: only when Descope's External Authentication action sent the customer here to
   // approve an agent (see lib/agentSession/externalAuth.ts). Ordinary sign-ins skip this.

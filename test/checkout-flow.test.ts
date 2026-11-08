@@ -35,9 +35,9 @@ describe('browse to order', () => {
     const { placeOrder, getOrder, listOrders } = await import('@/lib/services/orders');
 
     const product = await getProductBySlug('cascade-45l');
-    await addToCart(ids.alice, product.id, 2);
+    await addToCart({ customerId: ids.alice }, product.id, 2);
 
-    const cart = await getCart(ids.alice);
+    const cart = await getCart({ customerId: ids.alice });
     expect(cart.totalCents).toBe(91_140);
 
     const order = await placeOrder(ids.alice, {
@@ -46,7 +46,7 @@ describe('browse to order', () => {
     });
 
     expect(order.totalCents).toBe(cart.totalCents);
-    expect((await getCart(ids.alice)).items).toEqual([]);
+    expect((await getCart({ customerId: ids.alice })).items).toEqual([]);
     expect(await listOrders(ids.alice)).toHaveLength(1);
 
     const detail = await getOrder(ids.alice, order.orderNumber);
@@ -63,7 +63,7 @@ describe('browse to order', () => {
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
     const { NotFoundError } = await import('@/lib/services/errors');
 
-    await addToCart(ids.alice, ids.productIds[2], 1);
+    await addToCart({ customerId: ids.alice }, ids.productIds[2], 1);
     const order = await placeOrder(ids.alice, await defaultsFor(ids.alice));
 
     await expect(getOrder(ids.carol, order.orderNumber))
@@ -74,8 +74,8 @@ describe('browse to order', () => {
     const { addToCart, getCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, ids.productIds[2], 1); // $18.00 mug
-    const cart = await getCart(ids.alice);
+    await addToCart({ customerId: ids.alice }, ids.productIds[2], 1); // $18.00 mug
+    const cart = await getCart({ customerId: ids.alice });
     expect(cart.shippingCents).toBe(895);
 
     const order = await placeOrder(ids.alice, {
@@ -90,7 +90,7 @@ describe('browse to order', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder, getOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, ids.productIds[0], 1);
+    await addToCart({ customerId: ids.alice }, ids.productIds[0], 1);
     const order = await placeOrder(ids.alice, await defaultsFor(ids.alice));
 
     await tdb.db.update(schema.products).set({ priceCents: 1 })
