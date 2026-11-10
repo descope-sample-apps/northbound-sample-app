@@ -24,8 +24,9 @@ Agent Edge runs in front of the store. It recognizes agents, sends them to the f
 
 - **It accepts the agent's token.** [`lib/agentSession/descope.ts`](lib/agentSession/descope.ts) checks the Descope token in the `DS` cookie and signs the agent in as the customer with the same email. The token needs `orders:read` or `orders:write`.
 - **It asks before an agent buys.** Agents connect read-only. At checkout, [`lib/agentSession/stepUp.ts`](lib/agentSession/stepUp.ts) sends an agent without `orders:write` to the front door to approve that order.
+- **It won't let an agent change the account.** Northbound issues no scope for account data, so [`lib/agentSession/accountChanges.ts`](lib/agentSession/accountChanges.ts) refuses an agent that tries to edit the profile, a saved address, or a payment method. Those are the customer's own, and an agent that needs a different address can ask them. A store that wants to offer this should issue a scope for it and check that here instead.
 
-It also shows which orders an agent placed, which is optional. Checkout saves the token's `act.sub` with the order, and order history marks those orders "By your AI assistant".
+It also shows the customer who has been shopping for them. Every agent that signs in is recorded in `known_agents`, and **/account/assistants** lists each one with what it is allowed to do, when it was approved, when it was last active, and how many orders it placed. Checkout saves the token's `act.sub` with the order, so order history marks those orders "By your AI assistant" and the two lists name the same agent the same way.
 
 Set these in `.env.local`, and run Agent Edge in front of the store (see its [README](https://github.com/descope/agent-edge)):
 
@@ -36,6 +37,7 @@ Set these in `.env.local`, and run Agent Edge in front of the store (see its [RE
 | `FRONT_DOOR_URL` | The front door, for step-up |
 | `STEP_UP_SECRET` | The same value as the front door's |
 | `DEMO_AUTO_SIGNUP` | `true` creates an account, with a sample address and test card, the first time a new email approves an agent. For demos. |
+| `DESCOPE_INTROSPECT_CLIENT_ID` / `_SECRET` | Optional. Set both and the store checks every request against Descope, so revoking an agent takes effect immediately instead of when its token expires. Unset, it verifies the signature offline only — then keep token lifetimes short. |
 
 ### How customers approve
 

@@ -39,9 +39,9 @@ describe('concurrent checkout with no contended row', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, mug(), 1);
-    await addToCart(ids.carol, mug(), 1);
-    await addToCart(ids.bob, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
+    await addToCart({ customerId: ids.carol }, mug(), 1);
+    await addToCart({ customerId: ids.bob }, mug(), 1);
 
     const [a, c, b] = await Promise.all([
       defaultsFor(ids.alice), defaultsFor(ids.carol), defaultsFor(ids.bob),
@@ -71,7 +71,7 @@ describe('concurrent checkout with no contended row', () => {
     const { ServiceError } = await import('@/lib/services/errors');
 
     for (const customerId of [ids.alice, ids.carol, ids.bob]) {
-      await addToCart(customerId, pack(), 1);
+      await addToCart({ customerId: customerId }, pack(), 1);
     }
     const defaults = await Promise.all(
       [ids.alice, ids.carol, ids.bob].map((id) => defaultsFor(id)),
@@ -99,7 +99,7 @@ describe('deleting account details a past order depends on', () => {
     const { ServiceError } = await import('@/lib/services/errors');
 
     const defaults = await defaultsFor(ids.alice);
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
     await placeOrder(ids.alice, defaults);
 
     const error = await deleteAddress(ids.alice, defaults.addressId).catch((e) => e);
@@ -118,7 +118,7 @@ describe('deleting account details a past order depends on', () => {
     const { ServiceError } = await import('@/lib/services/errors');
 
     const defaults = await defaultsFor(ids.alice);
-    await addToCart(ids.alice, mug(), 1);
+    await addToCart({ customerId: ids.alice }, mug(), 1);
     await placeOrder(ids.alice, defaults);
 
     const error = await deletePaymentMethod(ids.alice, defaults.paymentMethodId)
@@ -151,7 +151,7 @@ describe('cart creation is safe under concurrent first access', () => {
     expect(await tdb.db.select().from(schema.carts)).toHaveLength(0);
 
     const results = await Promise.allSettled([
-      getCart(ids.alice), getCart(ids.alice), getCart(ids.alice),
+      getCart({ customerId: ids.alice }), getCart({ customerId: ids.alice }), getCart({ customerId: ids.alice }),
     ]);
 
     expect(results.filter((r) => r.status === 'rejected')).toEqual([]);
@@ -166,7 +166,7 @@ describe('stock decrement is atomic', () => {
     const { addToCart } = await import('@/lib/services/cart');
     const { placeOrder } = await import('@/lib/services/orders');
 
-    await addToCart(ids.alice, pack(), 10); // exactly all of it
+    await addToCart({ customerId: ids.alice }, pack(), 10); // exactly all of it
     await placeOrder(ids.alice, await defaultsFor(ids.alice));
 
     const [product] = await tdb.db.select().from(schema.products)
@@ -179,7 +179,7 @@ describe('stock decrement is atomic', () => {
     const { placeOrder } = await import('@/lib/services/orders');
     const { readFileSync } = await import('node:fs');
 
-    await addToCart(ids.alice, pack(), 2);
+    await addToCart({ customerId: ids.alice }, pack(), 2);
     await placeOrder(ids.alice, await defaultsFor(ids.alice));
 
     const [product] = await tdb.db.select().from(schema.products)

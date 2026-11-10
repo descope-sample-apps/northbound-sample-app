@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireCustomer } from '@/lib/auth/session-cookie';
+import { requireCartOwner } from '@/lib/cart/owner';
 import { removeFromCart, updateCartItem } from '@/lib/services/cart';
 import { ServiceError } from '@/lib/services/errors';
 
@@ -11,12 +11,12 @@ export async function updateQuantityAction(
   _previous: CartActionState,
   formData: FormData,
 ): Promise<CartActionState> {
-  const customer = await requireCustomer();
+  const owner = await requireCartOwner();
   const productId = Number(formData.get('productId'));
   const quantity = Number(formData.get('quantity'));
 
   try {
-    await updateCartItem(customer.id, productId, quantity);
+    await updateCartItem(owner, productId, quantity);
   } catch (error) {
     if (error instanceof ServiceError) return { error: error.message };
     throw error;
@@ -31,10 +31,10 @@ export async function removeItemAction(
   _previous: CartActionState,
   formData: FormData,
 ): Promise<CartActionState> {
-  const customer = await requireCustomer();
+  const owner = await requireCartOwner();
 
   try {
-    await removeFromCart(customer.id, Number(formData.get('productId')));
+    await removeFromCart(owner, Number(formData.get('productId')));
   } catch (error) {
     if (error instanceof ServiceError) return { error: error.message };
     throw error;
