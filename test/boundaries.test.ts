@@ -47,14 +47,22 @@ const AGENT_DIR = join('lib', 'agentSession');
 
 /**
  * The only storefront files that import the agent code: the session lookup, checkout's
- * step-up, login's External Authentication, the account write gate, and the page that
- * shows a customer which assistants have acted for them.
+ * step-up, login's External Authentication, the account write gate, the page that shows
+ * a customer which assistants have acted for them, and the two order views that name the
+ * assistant which placed an order.
  *
- * The last two widen the graft, and that is the point of listing them. An assistant is
- * no longer only something the edge deals with before a request arrives — a customer
- * can now see one in their own account, and the store refuses one that tries to change
- * account data. Both are storefront features, so they belong in storefront files, and
- * this list is what keeps that growth visible in a diff rather than ambient.
+ * THE LAST FOUR WIDEN THE GRAFT, AND THAT IS THE POINT OF LISTING THEM. An assistant is
+ * no longer only something the edge deals with before a request arrives. A customer can
+ * see one in their own account, the store refuses one that tries to change account data,
+ * and an order now says which assistant placed it and links to what else that assistant
+ * may do. Those are storefront features — a customer asking "who bought this?" is asking
+ * a question about their own order, not about OAuth — so they belong in storefront files,
+ * and this list is what keeps that growth visible in a diff rather than ambient.
+ *
+ * The order views import nothing but the client-ID-to-name mapping. They do not read a
+ * token, a scope or a session; `orders.placed_by_agent` is already theirs. If one of them
+ * ever reaches for lib/agentSession for anything else, that is a different change and
+ * deserves a different argument.
  */
 const AGENT_AWARE_FILES = [
   join('app', 'account', 'actions.ts'),
@@ -62,6 +70,8 @@ const AGENT_AWARE_FILES = [
   join('app', 'checkout', 'actions.ts'),
   join('app', 'login', 'actions.ts'),
   join('app', 'login', 'page.tsx'),
+  join('app', 'orders', '[orderNumber]', 'page.tsx'),
+  join('app', 'orders', 'page.tsx'),
   join('lib', 'auth', 'session-cookie.ts'),
 ].sort();
 

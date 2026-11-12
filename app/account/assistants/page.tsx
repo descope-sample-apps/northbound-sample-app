@@ -1,6 +1,7 @@
 import { ButtonLink } from '@/components/brand/Button';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { listAssistants } from '@/lib/agentSession/knownAgents';
+import { assistantAnchor } from '@/lib/agentSession/agentProducts';
 
 const approvedOn = new Intl.DateTimeFormat('en-US', {
   year: 'numeric', month: 'long', day: 'numeric',
@@ -30,7 +31,13 @@ export default async function AssistantsPage() {
       ) : (
         <ul className="mt-8 grid gap-4">
           {assistants.map((assistant) => (
-            <li key={assistant.id} className="rounded-lg border border-rule bg-surface p-6">
+            <li
+              key={assistant.id}
+              // What an order's "by <name>" link lands on. scroll-mt keeps the card clear
+              // of the top edge when the browser jumps to it.
+              id={assistantAnchor(assistant.id)}
+              className="scroll-mt-8 rounded-lg border border-rule bg-surface p-6"
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-ember">
                   {assistant.product ? assistant.product.name : 'Third-party agent'}

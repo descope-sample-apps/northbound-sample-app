@@ -3,6 +3,7 @@ import { ButtonLink } from '@/components/brand/Button';
 import { Price } from '@/components/brand/Price';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { listOrders } from '@/lib/services/orders';
+import { identifyAgent } from '@/lib/agentSession/agentProducts';
 
 const STATUS_STYLE: Record<string, string> = {
   placed: 'bg-spruce/10 text-spruce',
@@ -50,7 +51,9 @@ export default async function OrdersPage() {
               </Link>
               <div className="text-xs text-muted">{dateFormat.format(order.placedAt)}</div>
               {order.placedByAgent && (
-                <div className="text-xs text-ember">By your AI assistant</div>
+                <div className="text-xs text-ember">
+                  By {identifyAgent(order.placedByAgent)?.name ?? 'your AI assistant'}
+                </div>
               )}
             </div>
 

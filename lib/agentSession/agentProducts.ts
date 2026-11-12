@@ -69,6 +69,18 @@ export function identifyAgent(clientId: string): AgentProduct | null {
   return knownClients()[clientId] ?? null;
 }
 
+/**
+ * The fragment that points at one assistant on /account/assistants.
+ *
+ * Shared so the link and the element it lands on can never drift apart. A client ID is
+ * base64 and may carry `+`, `/` or `=`, none of which belong in a URL fragment raw, so it
+ * is encoded; the `agent-` prefix keeps the id from starting with a digit, which older
+ * CSS selectors cannot address.
+ */
+export function assistantAnchor(clientId: string): string {
+  return `agent-${encodeURIComponent(clientId)}`;
+}
+
 /** Test seam. */
 export function resetAgentProductCache(): void {
   cache = undefined;

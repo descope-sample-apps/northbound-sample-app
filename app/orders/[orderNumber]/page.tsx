@@ -4,6 +4,7 @@ import { Price } from '@/components/brand/Price';
 import { requireCustomer } from '@/lib/auth/session-cookie';
 import { getOrder } from '@/lib/services/orders';
 import { NotFoundError } from '@/lib/services/errors';
+import { assistantAnchor, identifyAgent } from '@/lib/agentSession/agentProducts';
 
 const dateFormat = new Intl.DateTimeFormat('en-US', {
   year: 'numeric', month: 'long', day: 'numeric',
@@ -33,7 +34,22 @@ export default async function OrderDetailPage({
         <h1 className="display text-3xl tabular-nums">Order #{order.orderNumber}</h1>
         <span className="text-sm text-muted">
           {dateFormat.format(order.placedAt)} · {order.status}
-          {order.placedByAgent && ' · placed by your AI assistant'}
+          {/*
+            Just "by", because order.status already reads "placed" and the two together
+            said it twice. The name is a link to the assistant itself: an order placed
+            on the customer's behalf should lead to what else that assistant may do.
+          */}
+          {order.placedByAgent && (
+            <>
+              {' · by '}
+              <a
+                href={`/account/assistants#${assistantAnchor(order.placedByAgent)}`}
+                className="underline underline-offset-2 hover:text-spruce"
+              >
+                {identifyAgent(order.placedByAgent)?.name ?? 'your AI assistant'}
+              </a>
+            </>
+          )}
         </span>
       </div>
 
