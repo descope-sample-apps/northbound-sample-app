@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from 'jose';
 import { sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { customers, type Customer } from '@/db/schema';
@@ -99,31 +99,85 @@ async function stillSignedIn(token: string): Promise<boolean> {
 }
 
 /**
+ * The token's claims, read WITHOUT verifying it, for the debug logs below.
+ *
+ * NOT A CHECK, AND NOTHING MAY ACT ON IT. Anyone can write any claims into an unsigned
+ * token; jwtVerify is still the only thing that decides. It is decoded separately from
+ * that call so the claims appear for the tokens actually worth debugging — the ones that
+ * fail verification, where jwtVerify returns no payload to log.
+ */
+function peekClaims(token: string): Record<string, unknown> | null {
+  try {
+    return decodeJwt(token) as Record<string, unknown>;
+  } catch {
+    // Not a JWT at all, which the log line says by showing null next to the raw token.
+    return null;
+  }
+}
+
+/**
+ * One line per refusal, so a token that doesn't sign an agent in always says why.
+ *
+ * Every `return null` below went through here. Before, most of them were silent: a token
+ * with no email claim, the wrong scopes, or no matching customer produced an agent that
+ * simply wasn't signed in, with nothing in the log to say which guard turned it away.
+ */
+function reject(reason: string, detail?: Record<string, unknown>): null {
+  console.warn(JSON.stringify({ event: 'agent_token_rejected', reason, ...detail }));
+  return null;
+}
+
+/**
  * Fails closed: no DESCOPE_DISCOVERY_URL, a bad signature, the wrong issuer or audience,
  * an expired token, a missing email or act claim, neither Northbound scope, a token Descope
- * no longer considers active, or no matching customer all resolve to null.
+ * no longer considers active, or no matching customer all resolve to null — each of them
+ * naming itself on the log.
  */
 export async function resolveAgentToken(token: string): Promise<AgentSession | null> {
+  // DEBUGGING, AND THIS PRINTS A LIVE CREDENTIAL. `token` is the bearer token itself: anyone
+  // who can read these logs can replay it against this store until it expires, and `claims`
+  // spells out the customer's email beside it. It is logged before the guards below so a
+  // token still shows up when the store is misconfigured and nothing else would say so.
+  // Take this line out when the agent sign-in being chased is fixed.
+  const claims = peekClaims(token);
+  console.log(JSON.stringify({ event: 'agent_token_received', token, claims }));
+
+  if (!token) return reject('no token');
   const discoveryUrl = process.env.DESCOPE_DISCOVERY_URL;
-  if (!token || !discoveryUrl) return null;
+  if (!discoveryUrl) return reject('DESCOPE_DISCOVERY_URL is not set');
 
   try {
     const { issuer, jwks } = await descopeKeys(discoveryUrl);
-    const { payload } = await jwtVerify(token, jwks, { issuer, audience: process.env.DESCOPE_AUDIENCE || undefined });
+    const audience = process.env.DESCOPE_AUDIENCE || undefined;
+
+    let payload: JWTPayload;
+    try {
+      ({ payload } = await jwtVerify(token, jwks, { issuer, audience }));
+    } catch (error) {
+      // jose names the claim that disagreed but neither of the two values, which is the
+      // whole question when a token is minted for one resource and checked against
+      // another. `expected` is this store's configuration, `got` is what the front door
+      // actually sent; for `aud` they have to be the same string.
+      return reject(String(error), {
+        expected: { iss: issuer, aud: audience ?? null },
+        got: { iss: claims?.iss ?? null, aud: claims?.aud ?? null, exp: claims?.exp ?? null },
+      });
+    }
+
     const agent = (payload.act as { sub?: unknown } | undefined)?.sub;
-    if (typeof payload.email !== 'string' || typeof agent !== 'string') return null;
+    if (typeof payload.email !== 'string') return reject('token carries no email claim');
+    if (typeof agent !== 'string') return reject('token carries no act.sub claim');
 
     // The customer approved read-only access (orders:read) or a purchase (orders:write). A token
     // with neither wasn't issued for shopping here, so it doesn't sign an agent in.
     const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
-    if (!scopes.includes('orders:read') && !scopes.includes('orders:write')) return null;
+    if (!scopes.includes('orders:read') && !scopes.includes('orders:write')) {
+      return reject('token carries neither orders:read nor orders:write', { scopes });
+    }
 
     // Last, and only once the cheap local checks have passed: a forged or expired token
     // is rejected here without ever being sent to Descope.
-    if (!(await stillSignedIn(token))) {
-      console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: 'not active at Descope' }));
-      return null;
-    }
+    if (!(await stillSignedIn(token))) return reject('not active at Descope');
 
     // Descope's user and Northbound's customer are the same person when their emails match.
     const [existing] = await db.select().from(customers)
@@ -132,15 +186,21 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     const customer = existing ?? (process.env.DEMO_AUTO_SIGNUP === 'true'
       ? await createDemoCustomer(payload.email, typeof payload.name === 'string' ? payload.name : undefined)
       : undefined);
-    if (!customer) return null;
+    if (!customer) {
+      return reject('no Northbound customer with that email', {
+        email: payload.email,
+        demoAutoSignup: process.env.DEMO_AUTO_SIGNUP === 'true',
+      });
+    }
 
     // Only once the token has fully passed. Recording a rejected token would let
     // anyone with a forged JWT write rows into a customer's list of assistants.
     await recordAgentVisit(customer.id, agent, scopes);
 
+    console.log(JSON.stringify({ event: 'agent_token_accepted', agent, email: payload.email, scopes }));
     return { customer, agent, email: payload.email, scopes };
   } catch (error) {
-    console.warn(JSON.stringify({ event: 'agent_token_rejected', reason: String(error) }));
-    return null;
+    // Discovery, introspection and the database land here.
+    return reject(String(error));
   }
 }
