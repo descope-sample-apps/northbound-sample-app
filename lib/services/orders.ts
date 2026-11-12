@@ -159,7 +159,7 @@ export async function placeOrder(
 
 export async function listOrders(
   customerId: number,
-  options: { limit?: number } = {},
+  options: { limit?: number; placedByAgent?: string } = {},
 ): Promise<OrderSummary[]> {
   // A join plus GROUP BY rather than a correlated subquery: the subquery form
   // silently failed to correlate and summed every order's items into each row.
@@ -170,7 +170,14 @@ export async function listOrders(
     })
     .from(orders)
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
-    .where(eq(orders.customerId, customerId))
+    // customerId is never dropped from the filter: placedByAgent narrows a customer's
+    // own orders, it does not select across customers. An agent id arriving in a query
+    // string is untrusted, and on its own would read another customer's history.
+    .where(
+      options.placedByAgent
+        ? and(eq(orders.customerId, customerId), eq(orders.placedByAgent, options.placedByAgent))
+        : eq(orders.customerId, customerId),
+    )
     .groupBy(orders.id)
     .orderBy(desc(orders.orderNumber))
     .limit(options.limit ?? 50);
