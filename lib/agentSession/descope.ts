@@ -197,7 +197,21 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     // anyone with a forged JWT write rows into a customer's list of assistants.
     await recordAgentVisit(customer.id, agent, scopes);
 
-    console.log(JSON.stringify({ event: 'agent_token_accepted', agent, email: payload.email, scopes }));
+    // `agent` is the token's act.sub; `azp` is the OAuth client the token was issued to.
+    //
+    // BOTH, BECAUSE WHICH ONE NAMES THE AGENT IS NOT SETTLED. agentProducts.ts reads act.sub
+    // as a client ID on the strength of Descope's token exchange documentation, but this
+    // token comes from CIBA or the device flow, where Descope documents neither act nor how
+    // it relates to azp. Logging them side by side is what will answer it, from a real token
+    // rather than from an assumption — and this line outlives the debug one above, so the
+    // answer stays visible after the raw token stops being printed.
+    console.log(JSON.stringify({
+      event: 'agent_token_accepted',
+      agent,
+      azp: typeof payload.azp === 'string' ? payload.azp : null,
+      email: payload.email,
+      scopes,
+    }));
     return { customer, agent, email: payload.email, scopes };
   } catch (error) {
     // Discovery, introspection and the database land here.
