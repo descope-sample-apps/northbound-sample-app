@@ -275,4 +275,35 @@ describe('listOrders and getOrder', () => {
     const { listOrders } = await import('@/lib/services/orders');
     expect(await listOrders(ids.bob)).toEqual([]);
   });
+
+  it('narrows the list to one assistant when asked', async () => {
+    const { addToCart } = await import('@/lib/services/cart');
+    const { placeOrder, listOrders } = await import('@/lib/services/orders');
+    const defaults = await defaultsFor(ids.alice);
+
+    await addToCart({ customerId: ids.alice }, mug(), 1);
+    await placeOrder(ids.alice, { ...defaults, placedByAgent: 'cli_muse' });
+    await addToCart({ customerId: ids.alice }, mug(), 1);
+    await placeOrder(ids.alice, { ...defaults, placedByAgent: 'cli_dots' });
+    await addToCart({ customerId: ids.alice }, mug(), 1);
+    await placeOrder(ids.alice, defaults);
+
+    expect(await listOrders(ids.alice)).toHaveLength(3);
+    const muse = await listOrders(ids.alice, { placedByAgent: 'cli_muse' });
+    expect(muse).toHaveLength(1);
+    expect(muse[0].placedByAgent).toBe('cli_muse');
+  });
+
+  // The agent id reaches listOrders from a query string, so it is untrusted. If it ever
+  // replaced the customer scope rather than narrowing it, this page would hand one
+  // customer another customer's order history for the price of guessing a client id.
+  it('still scopes to the customer when filtering by assistant', async () => {
+    const { addToCart } = await import('@/lib/services/cart');
+    const { placeOrder, listOrders } = await import('@/lib/services/orders');
+
+    await addToCart({ customerId: ids.alice }, mug(), 1);
+    await placeOrder(ids.alice, { ...(await defaultsFor(ids.alice)), placedByAgent: 'cli_muse' });
+
+    expect(await listOrders(ids.carol, { placedByAgent: 'cli_muse' })).toEqual([]);
+  });
 });

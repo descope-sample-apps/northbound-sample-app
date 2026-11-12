@@ -28,25 +28,33 @@ async function render(list: Assistant[]) {
   return renderToStaticMarkup(await AssistantsPage());
 }
 
+/**
+ * What a customer can actually read. The client ID is still in the markup as the anchor
+ * an order's "by <name>" link lands on, and an attribute is not something anyone sees —
+ * asserting over raw HTML would confuse "shown on the page" with "present in the file".
+ */
+function visibleText(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ');
+}
+
 beforeEach(() => { requireCustomer.mockReset(); listAssistants.mockReset(); });
 
 describe('the assistants page', () => {
-  it('names a product the store knows, and leads with who operates it', async () => {
+  it('leads with the name a customer would use, and drops the client id', async () => {
     const html = await render([assistant({ id: 'cli_muse', product: { name: 'Muse', domain: 'muse.ai' } })]);
 
-    expect(html).toContain('Muse');
-    expect(html).toContain('muse.ai');
-    // The client id stays visible: it is what a customer matches against Descope.
-    expect(html).toContain('cli_muse');
+    expect(visibleText(html)).toContain('Muse');
+    // The id is what the token carries, not what a customer can judge. Beside a name it
+    // is noise, so it is shown only when there is no name to show instead.
+    expect(visibleText(html)).not.toContain('cli_muse');
   });
 
-  it('calls an unrecognized client a third-party agent and shows its id', async () => {
+  it('shows the client id when it has no name for the client', async () => {
     const html = await render([assistant({ id: 'cli_opaque_9f2', product: null })]);
 
-    expect(html).toContain('Third-party agent');
-    expect(html).toContain('cli_opaque_9f2');
+    expect(visibleText(html)).toContain('cli_opaque_9f2');
     // No invented name.
-    expect(html).not.toContain('Muse');
+    expect(visibleText(html)).not.toContain('Muse');
   });
 
   it('distinguishes two assistants in one list', async () => {
@@ -56,9 +64,16 @@ describe('the assistants page', () => {
       assistant({ id: 'cli_mystery', product: null }),
     ]);
 
-    for (const needle of ['Muse', 'muse.ai', 'Dots', 'openai.com', 'Third-party agent', 'cli_mystery']) {
+    for (const needle of ['Muse', 'Dots', 'cli_mystery']) {
       expect(html, `expected the page to show ${needle}`).toContain(needle);
     }
+  });
+
+  it('sends the order count to that assistant\'s orders, not to every order', async () => {
+    const html = await render([assistant({ id: 'cli_muse', product: { name: 'Muse', domain: 'muse.ai' }, ordersPlaced: 2 })]);
+
+    expect(html).toContain('2 orders placed');
+    expect(html).toContain('/orders?agent=cli_muse');
   });
 
   it('says so plainly when no assistant has signed in', async () => {

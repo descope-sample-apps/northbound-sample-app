@@ -20,8 +20,8 @@ export default async function AssistantsPage() {
       <p className="mt-3 max-w-prose text-sm text-muted">
         Assistants you have approved to shop at Northbound for you. Each one signs in
         with its own access, separately from your password, and you can see here
-        exactly what you allowed it to do. Anything Northbound doesn&rsquo;t recognize is
-        shown as a third-party agent with the client ID its token carries.
+        exactly what you allowed it to do. Anything Northbound doesn&rsquo;t recognize
+        shows the client ID from its token in place of a name.
       </p>
 
       {assistants.length === 0 ? (
@@ -40,7 +40,7 @@ export default async function AssistantsPage() {
             >
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-ember">
-                  {assistant.product ? assistant.product.name : 'Third-party agent'}
+                  Personal AI agent
                 </span>
                 <span className="text-xs text-muted">
                   Last active {lastActive.format(assistant.lastSeenAt)}
@@ -48,20 +48,24 @@ export default async function AssistantsPage() {
               </div>
 
               {/*
-                The headline is who operates it, because that is what a customer can judge.
-                An assistant this store has no name for shows its client ID instead — the
-                thing that is always true — rather than a reassuring guess.
+                The headline is what the customer would call it. An assistant this store has
+                no name for shows the client ID from its token instead — the thing that is
+                always true — rather than a reassuring guess. The ID appears only in that
+                case: beside a name it is noise, and a customer cannot judge it either way.
               */}
               <p className="display mt-2 text-[15px] break-all">
-                {assistant.product ? assistant.product.domain : assistant.id}
+                {assistant.product ? assistant.product.name : assistant.id}
               </p>
               <p className="mt-1 text-xs text-muted">
-                {assistant.product && <>Client {assistant.id} · </>}
                 Approved {approvedOn.format(assistant.firstSeenAt)}
                 {assistant.ordersPlaced > 0 && (
                   <>
                     {' · '}
-                    <a href="/orders" className="underline underline-offset-2 hover:text-spruce">
+                    {/* Their orders, not every order: the count is this assistant's. */}
+                    <a
+                      href={`/orders?agent=${encodeURIComponent(assistant.id)}`}
+                      className="underline underline-offset-2 hover:text-spruce"
+                    >
                       {assistant.ordersPlaced === 1
                         ? '1 order placed'
                         : `${assistant.ordersPlaced} orders placed`}

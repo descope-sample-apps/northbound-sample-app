@@ -16,17 +16,41 @@ const dateFormat = new Intl.DateTimeFormat('en-US', {
   year: 'numeric', month: 'short', day: 'numeric',
 });
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ agent?: string | string[] }>;
+}) {
   const customer = await requireCustomer();
-  const orders = await listOrders(customer.id);
+
+  // ?agent= narrows the list to one assistant, which is where /account/assistants
+  // sends a customer who clicks its order count. A repeated parameter arrives as an
+  // array; the first wins, so the page always filters by one thing or by nothing.
+  const { agent } = await searchParams;
+  const placedByAgent = Array.isArray(agent) ? agent[0] : agent;
+  const orders = await listOrders(customer.id, { placedByAgent });
+
+  // An id this store has no name for is never echoed back into the page: an arbitrary
+  // query string would then be reflected to the customer as a label.
+  const assistantName = placedByAgent
+    ? identifyAgent(placedByAgent)?.name ?? 'your AI assistant'
+    : undefined;
 
   if (orders.length === 0) {
     return (
       <main className="mx-auto max-w-6xl px-6 py-24 text-center">
-        <h1 className="display text-3xl">No orders yet</h1>
-        <p className="mt-3 text-muted">When you buy something it will show up here.</p>
+        <h1 className="display text-3xl">
+          {assistantName ? `No orders from ${assistantName}` : 'No orders yet'}
+        </h1>
+        <p className="mt-3 text-muted">
+          {assistantName
+            ? 'It has not placed an order for you.'
+            : 'When you buy something it will show up here.'}
+        </p>
         <div className="mt-8 flex justify-center">
-          <ButtonLink href="/shop">Shop all gear</ButtonLink>
+          {assistantName
+            ? <ButtonLink href="/orders" variant="secondary">All orders</ButtonLink>
+            : <ButtonLink href="/shop">Shop all gear</ButtonLink>}
         </div>
       </main>
     );
@@ -37,6 +61,14 @@ export default async function OrdersPage() {
       <h1 className="display text-3xl">Your orders</h1>
       <p className="mt-2 text-sm text-muted">
         {orders.length} {orders.length === 1 ? 'order' : 'orders'}
+        {assistantName && (
+          <>
+            {` placed by ${assistantName} · `}
+            <Link href="/orders" className="underline underline-offset-2 hover:text-spruce">
+              Show all orders
+            </Link>
+          </>
+        )}
       </p>
 
       <ul className="mt-8 divide-y divide-rule border-y border-rule">
@@ -51,9 +83,7 @@ export default async function OrdersPage() {
               </Link>
               <div className="text-xs text-muted">{dateFormat.format(order.placedAt)}</div>
               {order.placedByAgent && (
-                <div className="text-xs text-ember">
-                  By {identifyAgent(order.placedByAgent)?.name ?? 'your AI assistant'}
-                </div>
+                <div className="text-xs text-ember">By AI assistant</div>
               )}
             </div>
 
