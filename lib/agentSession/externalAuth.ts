@@ -32,7 +32,17 @@ export function externalAuthRequestId(value: unknown): string | undefined {
 export async function completeExternalAuth(requestId: string, customerId: number): Promise<string> {
   const projectId = process.env.DESCOPE_PROJECT_ID;
   const managementKey = process.env.DESCOPE_MANAGEMENT_KEY;
-  if (!projectId || !managementKey) throw new Error('External Authentication is not configured');
+  if (!projectId || !managementKey) {
+    // Names the variables, because this throw surfaces as a 500 on /login with a minified
+    // stack and nothing else to go on. Adding the External Authentication action to a
+    // Descope flow is what reaches this code, and it is done in the console rather than
+    // here, so whoever sees this error has no reason to know which settings it wants.
+    const missing = [
+      !projectId && 'DESCOPE_PROJECT_ID',
+      !managementKey && 'DESCOPE_MANAGEMENT_KEY',
+    ].filter(Boolean).join(' and ');
+    throw new Error(`External Authentication is not configured: set ${missing}`);
+  }
 
   const [customer] = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
   if (!customer) throw new Error('no such customer');
