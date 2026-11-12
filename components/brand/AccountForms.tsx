@@ -44,7 +44,7 @@ export function AddressForm({ address }: { address?: Address }) {
     <form action={formAction} className="space-y-4">
       {address && <input type="hidden" name="id" value={address.id} />}
 
-      <Field label="Label" name="label" defaultValue={address?.label ?? ''} required />
+      <Field label="Label" name="label" defaultValue={address?.label ?? ''} placeholder="Home" required />
       <Field label="Recipient" name="recipient" defaultValue={address?.recipient ?? ''} required />
       <Field label="Street address" name="line1" defaultValue={address?.line1 ?? ''} required />
       <Field label="Apartment, suite" name="line2" defaultValue={address?.line2 ?? ''} />
