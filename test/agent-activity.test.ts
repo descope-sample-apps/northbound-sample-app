@@ -182,6 +182,25 @@ describe('what the customer is shown', () => {
     expect((await listAssistants(ALICE)).map((a) => a.id)).toEqual(['agt_new', 'agt_old']);
   });
 
+  // act.sub is the OAuth client ID, so the list can say which product is acting.
+  it('names the product behind a client ID the store knows', async () => {
+    const { listAssistants, recordAgentVisit } = await import('@/lib/agentSession/knownAgents');
+    const { resetAgentProductCache } = await import('@/lib/agentSession/agentProducts');
+    process.env.AGENT_CLIENTS = JSON.stringify({ agt_abc: { name: 'Muse', domain: 'muse.ai' } });
+    resetAgentProductCache();
+
+    await recordAgentVisit(ALICE, 'agt_abc', ['orders:read']);
+    await recordAgentVisit(ALICE, 'agt_unknown', ['orders:read']);
+
+    const byId = Object.fromEntries((await listAssistants(ALICE)).map((a) => [a.id, a.product]));
+    expect(byId.agt_abc).toEqual({ name: 'Muse', domain: 'muse.ai' });
+    // Shown as a third-party agent rather than guessed at.
+    expect(byId.agt_unknown).toBeNull();
+
+    delete process.env.AGENT_CLIENTS;
+    resetAgentProductCache();
+  });
+
   it('says nothing when no assistant has ever signed in', async () => {
     const { listAssistants } = await import('@/lib/agentSession/knownAgents');
 

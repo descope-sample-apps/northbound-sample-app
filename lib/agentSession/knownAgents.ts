@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { knownAgents, orders } from '@/db/schema';
+import { identifyAgent, type AgentProduct } from './agentProducts';
 
 /**
  * The customer's record of which AI assistants have acted for them.
@@ -65,8 +66,10 @@ export async function recordAgentVisit(
 }
 
 export type Assistant = {
-  /** The token's act.sub. Shown as-is: it is the only name the customer can match against Descope. */
+  /** The token's act.sub — the OAuth client ID. Shown as-is: it is the durable identifier. */
   id: string;
+  /** Which product this client ID belongs to, when the store knows. Null means third-party. */
+  product: AgentProduct | null;
   firstSeenAt: Date;
   lastSeenAt: Date;
   /** What it is currently allowed to do, one sentence per permission. */
@@ -95,6 +98,7 @@ export async function listAssistants(customerId: number): Promise<Assistant[]> {
 
   return rows.map((row) => ({
     id: row.agentId,
+    product: identifyAgent(row.agentId),
     firstSeenAt: row.firstSeenAt,
     lastSeenAt: row.lastSeenAt,
     allowed: describe(row.scope),

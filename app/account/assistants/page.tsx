@@ -19,7 +19,8 @@ export default async function AssistantsPage() {
       <p className="mt-3 max-w-prose text-sm text-muted">
         Assistants you have approved to shop at Northbound for you. Each one signs in
         with its own access, separately from your password, and you can see here
-        exactly what you allowed it to do.
+        exactly what you allowed it to do. Anything Northbound doesn&rsquo;t recognize is
+        shown as a third-party agent with the client ID its token carries.
       </p>
 
       {assistants.length === 0 ? (
@@ -32,15 +33,23 @@ export default async function AssistantsPage() {
             <li key={assistant.id} className="rounded-lg border border-rule bg-surface p-6">
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-ember">
-                  AI assistant
+                  {assistant.product ? assistant.product.name : 'Third-party agent'}
                 </span>
                 <span className="text-xs text-muted">
                   Last active {lastActive.format(assistant.lastSeenAt)}
                 </span>
               </div>
 
-              <p className="display mt-2 text-[15px] break-all">{assistant.id}</p>
+              {/*
+                The headline is who operates it, because that is what a customer can judge.
+                An assistant this store has no name for shows its client ID instead — the
+                thing that is always true — rather than a reassuring guess.
+              */}
+              <p className="display mt-2 text-[15px] break-all">
+                {assistant.product ? assistant.product.domain : assistant.id}
+              </p>
               <p className="mt-1 text-xs text-muted">
+                {assistant.product && <>Client {assistant.id} · </>}
                 Approved {approvedOn.format(assistant.firstSeenAt)}
                 {assistant.ordersPlaced > 0 && (
                   <>
