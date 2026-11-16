@@ -203,11 +203,15 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     // it relates to azp. Logging them side by side is what will answer it, from a real token
     // rather than from an assumption. Both are identifiers, not credentials, so this line
     // stays once the question is settled.
+    //
+    // The customer is named by row id rather than by email. The id answers the only question
+    // this log is for — which customer an agent acted for — and an email on every accepted
+    // request is the same personal data this function stopped printing beside the token.
     console.log(JSON.stringify({
       event: 'agent_token_accepted',
       agent,
       azp: typeof payload.azp === 'string' ? payload.azp : null,
-      email: payload.email,
+      customer: customer.id,
       scopes,
     }));
     return { customer, agent, email: payload.email, scopes };
