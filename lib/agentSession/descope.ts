@@ -99,7 +99,7 @@ async function stillSignedIn(token: string): Promise<boolean> {
 }
 
 /**
- * The token's claims, read WITHOUT verifying it, for the debug logs below.
+ * The token's claims, read WITHOUT verifying it, to describe a rejection on the log.
  *
  * NOT A CHECK, AND NOTHING MAY ACT ON IT. Anyone can write any claims into an unsigned
  * token; jwtVerify is still the only thing that decides. It is decoded separately from
@@ -110,7 +110,8 @@ function peekClaims(token: string): Record<string, unknown> | null {
   try {
     return decodeJwt(token) as Record<string, unknown>;
   } catch {
-    // Not a JWT at all, which the log line says by showing null next to the raw token.
+    // Not a JWT at all. The rejection below then reports nulls for iss, aud and exp, which
+    // is itself the answer: nothing arrived that could carry them.
     return null;
   }
 }
@@ -134,13 +135,10 @@ function reject(reason: string, detail?: Record<string, unknown>): null {
  * naming itself on the log.
  */
 export async function resolveAgentToken(token: string): Promise<AgentSession | null> {
-  // DEBUGGING, AND THIS PRINTS A LIVE CREDENTIAL. `token` is the bearer token itself: anyone
-  // who can read these logs can replay it against this store until it expires, and `claims`
-  // spells out the customer's email beside it. It is logged before the guards below so a
-  // token still shows up when the store is misconfigured and nothing else would say so.
-  // Take this line out when the agent sign-in being chased is fixed.
+  // Read here rather than at the rejection below, because a token that fails verification is
+  // exactly the one worth describing and jwtVerify returns no payload for it. The token itself
+  // is never logged: it is a live credential, replayable against this store until it expires.
   const claims = peekClaims(token);
-  console.log(JSON.stringify({ event: 'agent_token_received', token, claims }));
 
   if (!token) return reject('no token');
   const discoveryUrl = process.env.DESCOPE_DISCOVERY_URL;
@@ -203,8 +201,8 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
     // as a client ID on the strength of Descope's token exchange documentation, but this
     // token comes from CIBA or the device flow, where Descope documents neither act nor how
     // it relates to azp. Logging them side by side is what will answer it, from a real token
-    // rather than from an assumption — and this line outlives the debug one above, so the
-    // answer stays visible after the raw token stops being printed.
+    // rather than from an assumption. Both are identifiers, not credentials, so this line
+    // stays once the question is settled.
     console.log(JSON.stringify({
       event: 'agent_token_accepted',
       agent,
