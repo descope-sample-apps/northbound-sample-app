@@ -74,14 +74,48 @@ describe('GET /.well-known/poppy.json', () => {
   // and a document that says `domain: northbound.camp` and then offers an API on
   // www.northbound.camp contradicts itself: an agent sent to either one is looking for
   // the apex, and refuses an API somewhere else.
-  it('advertises the API on the domain it names, not the host the proxy reports', async () => {
-    for (const host of ['northbound.camp', 'www.northbound.camp']) {
-      const res = await GET(new Request(`https://${host}/.well-known/poppy.json`));
+  // EVERY CASE SENDS x-forwarded-host, because that header IS the regression: Vercel
+  // reported www for apex requests, and a test that leaves it out passes whether or not
+  // the route reads it at all. The spellings below are the ones a proxy actually produces
+  // — the alias, a differently cased host, and the explicit default port.
+  it.each([
+    ['the apex, reported as www', 'northbound.camp', 'www.northbound.camp'],
+    ['www, reported as www', 'www.northbound.camp', 'www.northbound.camp'],
+    ['the apex, reported as itself', 'northbound.camp', 'northbound.camp'],
+    ['a mixed-case forwarded host', 'northbound.camp', 'WWW.Northbound.camp'],
+    ['an explicit default port', 'northbound.camp', 'northbound.camp:443'],
+  ])('advertises the API on the domain it names: %s', async (_name, asked, forwarded) => {
+    const res = await GET(new Request(`https://${asked}/.well-known/poppy.json`, {
+      headers: { 'x-forwarded-host': forwarded, 'x-forwarded-proto': 'https' },
+    }));
+    const doc = await res.json();
+
+    expect(doc.organization.domain).toBe('northbound.camp');
+    expect(doc.apis[0].url).toBe('https://northbound.camp/api/agent/v1/openapi.json');
+  });
+
+  // The invariant behind all of the above, and the one an agent actually checks: whatever
+  // host the document ends up describing, it advertises its API on that same host.
+  it('never names one host and advertises an API on another', async () => {
+    for (const forwarded of ['www.northbound.camp', 'northbound.camp', 'preview-x1.vercel.app']) {
+      const res = await GET(new Request('https://northbound.camp/.well-known/poppy.json', {
+        headers: { 'x-forwarded-host': forwarded, 'x-forwarded-proto': 'https' },
+      }));
       const doc = await res.json();
 
-      expect(doc.apis[0].url).toBe('https://northbound.camp/api/agent/v1/openapi.json');
       expect(new URL(doc.apis[0].url).host).toBe(doc.organization.domain);
     }
+  });
+
+  // A forwarded host that is not a host at all must not throw its way out of a discovery
+  // document and into a 500. The request's own origin is the fallback.
+  it('falls back to the request when the forwarded host is junk', async () => {
+    const res = await GET(new Request('https://northbound.camp/.well-known/poppy.json', {
+      headers: { 'x-forwarded-host': 'not a host' },
+    }));
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).organization.domain).toBe('northbound.camp');
   });
 
   it('describes itself on a host that is not this site at all', async () => {
@@ -89,8 +123,11 @@ describe('GET /.well-known/poppy.json', () => {
     const doc = await res.json();
 
     // A preview deployment and a local dev server have to be able to describe
-    // themselves, so only this site's own spellings are canonicalized.
+    // themselves, so only this site's own spellings are canonicalized — and the
+    // document names the host it is actually on rather than claiming to be
+    // northbound.camp's document served somewhere it is not.
     expect(doc.apis[0].url).toBe('http://localhost:3000/api/agent/v1/openapi.json');
+    expect(doc.organization.domain).toBe('localhost:3000');
   });
 
   // The issuer lives in /.well-known/oauth-protected-resource. Unconfigured, the

@@ -46,8 +46,17 @@ export function publicOrigin(request: Request): string {
   const url = new URL(request.url);
   const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
   const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const host = forwardedHost || url.host;
-  const proto = forwardedProto || url.protocol.replace(/:$/, '');
+
+  // THROUGH URL BEFORE COMPARING ANYTHING. A host is case-insensitive and carries an
+  // implied port, so "WWW.Northbound.camp" and "northbound.camp:443" are this site said
+  // two other ways. Comparing the raw header to a lowercase literal misses both, and the
+  // miss is silent: the document goes out naming a host organization.domain does not.
+  // `new URL` lowercases the host and drops the port when it is the scheme's default,
+  // which is the whole normalization, done by the parser rather than by hand here.
+  const origin = normalizedOrigin(
+    forwardedProto || url.protocol.replace(/:$/, ''),
+    forwardedHost || url.host,
+  ) ?? url.origin;
 
   // THE DOCUMENTS FOLLOW organization.domain, NOT THE PROXY. Vercel reported
   // x-forwarded-host: www.northbound.camp even for requests to the apex, which published
@@ -57,11 +66,43 @@ export function publicOrigin(request: Request): string {
   // The host still decides, because a preview deployment and a local dev server have to
   // describe themselves; it is only canonicalized when it IS this site, under either
   // spelling. A site that genuinely lives on www says so in ORGANIZATION_DOMAIN.
+  const { host } = new URL(origin);
   if (host === ORGANIZATION_DOMAIN || host === `www.${ORGANIZATION_DOMAIN}`) {
     return `https://${ORGANIZATION_DOMAIN}`;
   }
 
-  return `${proto}://${host}`;
+  return origin;
+}
+
+/**
+ * `proto://host` as a URL origin, or null when the two do not make one.
+ *
+ * A forwarded header is attacker-supplied in principle, so a value that is not a host at
+ * all must not throw its way out of a discovery document and into a 500. The caller falls
+ * back to the request's own origin, which is the one thing here that cannot be forged.
+ */
+function normalizedOrigin(proto: string, host: string): string | null {
+  try {
+    return new URL(`${proto}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What `organization.domain` says, which is the host everything else in the document is
+ * on — because it is read off the same origin they are built from.
+ *
+ * Poppy 0.4 (3.2) has an agent check this field against the host that served the
+ * document, so a constant would be right only where the constant IS the host. On
+ * northbound.camp it is: publicOrigin canonicalizes both spellings to ORGANIZATION_DOMAIN,
+ * and the worker in front redirects www to the apex before this route is reached at all.
+ * Anywhere else — a preview deployment, a dev server — a hardcoded domain would publish a
+ * document claiming to be northbound.camp's while advertising APIs on the host it was
+ * actually served from, which is the same self-contradiction this file exists to prevent.
+ */
+export function organizationDomain(request: Request): string {
+  return new URL(publicOrigin(request)).host;
 }
 
 /** The resource identifier this API is known by: the string tokens are minted for. */
