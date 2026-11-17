@@ -56,7 +56,7 @@ Set these in `.env.local`, and run Agent Edge in front of the store (see its [RE
 | `DESCOPE_DISCOVERY_URL` | Your Descope inbound app's Discovery URL |
 | `DESCOPE_AUDIENCE` | The resource agents' tokens must be for. Set it to the agent API's own identifier, `https://<your site>/api/agent/v1` — that is the `resource` the protected resource metadata publishes, so it is what an agent asks Descope for. Match the front door's `RESOURCE` to it. |
 | `DESCOPE_ISSUER` | Optional. The authorization server named in the agent API's protected resource metadata. Unset, it is read from `DESCOPE_DISCOVERY_URL`, which is also where the token verifier gets it — so the two cannot disagree. Use the same value as Agent Edge's `DESCOPE_ISSUER`. |
-| `PUBLIC_ORIGIN` | Optional. The origin to use in the discovery documents, such as `https://northbound.camp`. Unset, it follows the host each request arrived on. |
+| `PUBLIC_ORIGIN` | Optional. The origin to use in the discovery documents, such as `https://northbound.camp`. Unset, requests for this site are published under the domain `poppy.json` names, whichever spelling arrived, and anything else — a preview deployment, a dev server — describes itself. |
 | `FRONT_DOOR_URL` | The front door, for step-up |
 | `STEP_UP_SECRET` | The same value as the front door's |
 | `AGENT_CLIENTS` | Optional. Names the products behind agent client IDs, as JSON, so `/account/assistants` can show "Muse" instead of an opaque id. Anything unlisted appears as a third-party agent. |

@@ -69,13 +69,28 @@ describe('GET /.well-known/poppy.json', () => {
     expect(new URL(api.url).origin).toBe(ORIGIN);
   });
 
-  // Served on www, the document has to say www — an agent checks the APIs it is given
-  // against the site it actually opened.
-  it('builds the API URL from the host it was asked on', async () => {
-    const res = await GET(new Request('https://www.northbound.camp/.well-known/poppy.json'));
+  // The API is advertised on organization.domain whichever spelling was asked for.
+  // Vercel reports x-forwarded-host: www.northbound.camp even for requests to the apex,
+  // and a document that says `domain: northbound.camp` and then offers an API on
+  // www.northbound.camp contradicts itself: an agent sent to either one is looking for
+  // the apex, and refuses an API somewhere else.
+  it('advertises the API on the domain it names, not the host the proxy reports', async () => {
+    for (const host of ['northbound.camp', 'www.northbound.camp']) {
+      const res = await GET(new Request(`https://${host}/.well-known/poppy.json`));
+      const doc = await res.json();
+
+      expect(doc.apis[0].url).toBe('https://northbound.camp/api/agent/v1/openapi.json');
+      expect(new URL(doc.apis[0].url).host).toBe(doc.organization.domain);
+    }
+  });
+
+  it('describes itself on a host that is not this site at all', async () => {
+    const res = await GET(new Request('http://localhost:3000/.well-known/poppy.json'));
     const doc = await res.json();
 
-    expect(doc.apis[0].url).toBe('https://www.northbound.camp/api/agent/v1/openapi.json');
+    // A preview deployment and a local dev server have to be able to describe
+    // themselves, so only this site's own spellings are canonicalized.
+    expect(doc.apis[0].url).toBe('http://localhost:3000/api/agent/v1/openapi.json');
   });
 
   // The issuer lives in /.well-known/oauth-protected-resource. Unconfigured, the
