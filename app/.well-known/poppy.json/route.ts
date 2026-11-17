@@ -3,6 +3,10 @@
 // A route rather than a file in public/, so the issuer comes from configuration
 // instead of being committed.
 import { NextResponse } from 'next/server';
+// Constants and URL arithmetic only. This document stays a published file, not an entry
+// point: lib/api/resource.ts imports no database and no token verifier, so advertising
+// the API does not pull the agent code in behind it.
+import { API_BASE_PATH, publicOrigin } from '@/lib/api/resource';
 
 // The issuer is read per request, not baked in at build time.
 export const dynamic = 'force-dynamic';
@@ -20,7 +24,7 @@ export const dynamic = 'force-dynamic';
  * its own URL on this host. Northbound serves one version; a store with agents already
  * integrated would add it rather than cut them off on a draft bump.
  */
-export async function GET() {
+export async function GET(request: Request) {
   return NextResponse.json({
     protocol_version: '0.4',
     organization: {
@@ -35,10 +39,11 @@ export async function GET() {
       // then it MUST be one of them, character for character.
       ...(process.env.POPPY_ISSUER ? { issuer: process.env.POPPY_ISSUER } : {}),
 
-      // What the customer is agreeing to when they approve an agent. Northbound has no
-      // OpenAPI description for an agent to read these from, which is the case §4.7
-      // recommends auth.scopes for. They are the two scopes lib/agentSession/descope.ts
-      // accepts; a token with neither doesn't sign an agent in.
+      // What the customer is agreeing to when they approve an agent, in the words they
+      // approve them in. §4.7 keeps these here even now that the API below describes its
+      // own scopes: an OpenAPI document says which operation needs which scope, not what
+      // the customer is being asked to allow. They are the two scopes
+      // lib/agentSession/descope.ts accepts; a token with neither doesn't sign an agent in.
       scopes: {
         'orders:read': 'See your orders and what you have in your cart',
         'orders:write': 'Place an order with your saved address and card',
@@ -58,5 +63,21 @@ export async function GET() {
     // is no `poppy:browser-sign-in` scope above — 0.4 ties that scope to this endpoint,
     // and a Personal Agent only requests it from a store that lists one.
     web: {},
+
+    // WHAT MAKES THE SESSION SPENDABLE. `web: {}` on its own says an agent may browse
+    // Northbound signed out, and nothing more: a Session opened against this document had
+    // nowhere to be used, so an agent sent to buy something signed the customer in and
+    // then refused, because no URL here was one the site had vouched for.
+    //
+    // ABSOLUTE, NOT A PATH. Agents resolve this URL and check it is on the site they
+    // opened; a relative URL is rejected outright rather than resolved against the
+    // document, so it has to carry the scheme and host it was served on.
+    apis: [
+      {
+        type: 'openapi',
+        url: `${publicOrigin(request)}${API_BASE_PATH}/openapi.json`,
+        description: 'Browse the catalog, build the cart, and place and track orders',
+      },
+    ],
   });
 }
