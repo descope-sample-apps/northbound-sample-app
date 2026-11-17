@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 // Constants and URL arithmetic only. This document stays a published file, not an entry
 // point: lib/api/resource.ts imports no database and no token verifier, so advertising
 // the API does not pull the agent code in behind it.
-import { API_BASE_PATH, publicOrigin } from '@/lib/api/resource';
+import { API_BASE_PATH, ORGANIZATION_DOMAIN, publicOrigin } from '@/lib/api/resource';
 
 // The issuer is read per request, not baked in at build time.
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,9 @@ export async function GET(request: Request) {
     protocol_version: '0.4',
     organization: {
       name: 'Northbound',
-      domain: 'northbound.camp',
+      // The same constant the API URLs below are built from, so the document cannot
+      // name one host and then advertise an API on another.
+      domain: ORGANIZATION_DOMAIN,
     },
     auth: {
       // Optional, and omitted unless configured. The issuer is normally read from

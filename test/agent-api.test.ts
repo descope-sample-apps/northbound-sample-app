@@ -376,6 +376,32 @@ describe('the documents an agent discovers this API through', () => {
       `${ORIGIN}/.well-known/oauth-protected-resource/api/agent/v1`,
     );
   });
+
+  // The defect this caught in production: Vercel reports x-forwarded-host as
+  // www.northbound.camp even for a request to the apex, so the resource identifier and
+  // the 401's resource_metadata both named a host that organization.domain does not.
+  it('names this site by the domain it publishes, whatever the proxy says', async () => {
+    const { apiBaseUrl } = await import('@/lib/api/resource');
+    const forwarded = new Request('http://10.0.0.1/api/agent/v1/orders', {
+      headers: { 'x-forwarded-host': 'www.northbound.camp', 'x-forwarded-proto': 'https' },
+    });
+
+    expect(apiBaseUrl(forwarded)).toBe(`${ORIGIN}/api/agent/v1`);
+  });
+
+  // PUBLIC_ORIGIN still wins, because a deployment that knows better has to be able to
+  // say so without editing code.
+  it('lets PUBLIC_ORIGIN override the lot', async () => {
+    process.env.PUBLIC_ORIGIN = 'https://staging.northbound.camp';
+    try {
+      const { apiBaseUrl } = await import('@/lib/api/resource');
+
+      expect(apiBaseUrl(request('/api/agent/v1/orders')))
+        .toBe('https://staging.northbound.camp/api/agent/v1');
+    } finally {
+      delete process.env.PUBLIC_ORIGIN;
+    }
+  });
 });
 
 async function defaultsFor(customerId: number) {
