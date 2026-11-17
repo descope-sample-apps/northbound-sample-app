@@ -54,7 +54,7 @@ Set these in `.env.local`, and run Agent Edge in front of the store (see its [RE
 | Variable | Value |
 | --- | --- |
 | `DESCOPE_DISCOVERY_URL` | Your Descope inbound app's Discovery URL |
-| `DESCOPE_AUDIENCE` | The resource agents' tokens must be for. Set it to the agent API's own identifier, `https://<your site>/api/agent/v1` — that is the `resource` the protected resource metadata publishes, so it is what an agent asks Descope for. Match the front door's `RESOURCE` to it. |
+| `DESCOPE_AUDIENCE` | The resource agents' tokens must be for. Set it to the agent API's own identifier, `https://<your site>/api/agent/v1` — that is the `resource` the protected resource metadata publishes, so it is what an agent asks Descope for. Match the front door's `RESOURCE` to it. Several, comma-separated, are accepted; see below. Unset, the audience is not checked at all. |
 | `DESCOPE_ISSUER` | Optional. The authorization server named in the agent API's protected resource metadata. Unset, it is read from `DESCOPE_DISCOVERY_URL`, which is also where the token verifier gets it — so the two cannot disagree. Use the same value as Agent Edge's `DESCOPE_ISSUER`. |
 | `PUBLIC_ORIGIN` | Optional. The origin to use in the discovery documents, such as `https://northbound.camp`. Unset, requests for this site are published under the domain `poppy.json` names, whichever spelling arrived, and anything else — a preview deployment, a dev server — describes itself. |
 | `FRONT_DOOR_URL` | The front door, for step-up |
@@ -62,6 +62,19 @@ Set these in `.env.local`, and run Agent Edge in front of the store (see its [RE
 | `AGENT_CLIENTS` | Optional. Names the products behind agent client IDs, as JSON, so `/account/assistants` can show "Muse" instead of an opaque id. Anything unlisted appears as a third-party agent. |
 | `DEMO_AUTO_SIGNUP` | `true` creates an account, with a sample address and test card, the first time a new email approves an agent. For demos. |
 | `DESCOPE_INTROSPECT_CLIENT_ID` / `_SECRET` | Optional. Set both and the store checks every request against Descope, so revoking an agent takes effect immediately instead of when its token expires. Unset, it verifies the signature offline only — then keep token lifetimes short. |
+
+### Changing which resource tokens are for
+
+`DESCOPE_AUDIENCE` is checked here and minted by the front door's `RESOURCE`, in two separately deployed places, and a token is good for about an hour. Change one value and whichever deploys second spends that hour rejecting every agent that is already signed in. There is no ordering of a single value that avoids it.
+
+So the setting takes a list, and the move has four steps, each safe on its own:
+
+1. Add the new identifier beside the old one: `DESCOPE_AUDIENCE="https://northbound.camp/agent_resource,https://northbound.camp/api/agent/v1"`. Deploy. Nothing changes for anyone — a token matching **either** passes.
+2. Point the front door's `RESOURCE` at the new identifier and deploy it. New tokens carry the new audience; tokens already out there carry the old one, and both are accepted.
+3. Wait for the old tokens to expire.
+4. Drop the old identifier from the list and deploy.
+
+Agent Edge's `RESOURCE_URL` is a third copy of the same string. It no longer appears anywhere an agent follows — the API publishes its own metadata, and the worker leaves a `WWW-Authenticate` challenge alone when the origin already set one — but it is what the worker's own service document names, so move it too, any time after step 2.
 
 ### How customers approve
 

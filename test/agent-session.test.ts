@@ -245,6 +245,45 @@ describe('the resource the token is for (DESCOPE_AUDIENCE)', () => {
     expect(await resolveAgentToken(await token({ aud: 'https://other.example/api' }))).toBeNull();
     expect(await resolveAgentToken(await token())).toBeNull();
   });
+
+  // THE MIGRATION WINDOW. The audience is minted by the front door and checked here, in
+  // two separately deployed places, so moving a single value breaks whichever deploys
+  // second for as long as the live tokens last. A list is what makes the move orderable:
+  // accept both, move the front door, drop the old one.
+  const API = 'https://northbound.camp/api/agent/v1';
+
+  it('accepts either identifier while both are listed', async () => {
+    process.env.DESCOPE_AUDIENCE = `${RESOURCE},${API}`;
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+
+    expect((await resolveAgentToken(await token({ aud: RESOURCE })))?.customer.id).toBe(82731);
+    expect((await resolveAgentToken(await token({ aud: API })))?.customer.id).toBe(82731);
+  });
+
+  // A list widens the check, it never drops it: anything not on the list is still refused.
+  it('still refuses a resource that is on neither', async () => {
+    process.env.DESCOPE_AUDIENCE = `${RESOURCE},${API}`;
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+
+    expect(await resolveAgentToken(await token({ aud: 'https://other.example/api' }))).toBeNull();
+  });
+
+  it('ignores spacing and stray commas rather than demanding a resource named ""', async () => {
+    process.env.DESCOPE_AUDIENCE = `  ${RESOURCE} , , ${API}, `;
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+
+    expect((await resolveAgentToken(await token({ aud: API })))?.customer.id).toBe(82731);
+  });
+
+  // Unset still means no audience check at all, which is what keeps the store runnable
+  // with nothing but a discovery URL.
+  it('checks nothing when the setting is empty', async () => {
+    process.env.DESCOPE_AUDIENCE = '  ';
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+
+    expect((await resolveAgentToken(await token({ aud: 'https://anything.example' })))?.customer.id)
+      .toBe(82731);
+  });
 });
 
 describe('the scopes an agent needs to sign in', () => {
