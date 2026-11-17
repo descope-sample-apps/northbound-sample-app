@@ -121,6 +121,33 @@ async function stillSignedIn(token: string): Promise<boolean> {
 }
 
 /**
+ * The resource identifiers this store will accept a token for.
+ *
+ * ONE SETTING, BUT A LIST, SO THE IDENTIFIER CAN EVER BE CHANGED. The audience is minted
+ * by the front door and checked here, in two separately deployed places, and a token is
+ * good for an hour. Move them one at a time and whichever goes second spends that hour
+ * rejecting every live agent; move them "together" and the gap is however long the two
+ * deploys are apart. There is no ordering of a single value that does not break.
+ *
+ * With a list there is: add the new identifier, deploy, move the front door, then drop the
+ * old one. Every step is safe on its own, and the only moment both are accepted is the
+ * window in the middle — which is the point of it.
+ *
+ * jose takes `audience` as a string or an array and passes a token matching ANY of them,
+ * so the list is a widening, never a weakening of the check. Empty or unset stays
+ * undefined, which skips the check entirely, exactly as before.
+ */
+function acceptedAudiences(): string | string[] | undefined {
+  const configured = (process.env.DESCOPE_AUDIENCE ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (configured.length === 0) return undefined;
+  return configured.length === 1 ? configured[0] : configured;
+}
+
+/**
  * The token's claims, read WITHOUT verifying it, to describe a rejection on the log.
  *
  * NOT A CHECK, AND NOTHING MAY ACT ON IT. Anyone can write any claims into an unsigned
@@ -168,7 +195,7 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
 
   try {
     const { issuer, jwks } = await descopeKeys(discoveryUrl);
-    const audience = process.env.DESCOPE_AUDIENCE || undefined;
+    const audience = acceptedAudiences();
 
     let payload: JWTPayload;
     try {
@@ -177,7 +204,9 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
       // jose names the claim that disagreed but neither of the two values, which is the
       // whole question when a token is minted for one resource and checked against
       // another. `expected` is this store's configuration, `got` is what the front door
-      // actually sent; for `aud` they have to be the same string.
+      // actually sent; `aud` passes when the token names ANY of the expected ones, so an
+      // aud failure during a migration shows both lists side by side and says which step
+      // has not been taken.
       return reject(String(error), {
         expected: { iss: issuer, aud: audience ?? null },
         got: { iss: claims?.iss ?? null, aud: claims?.aud ?? null, exp: claims?.exp ?? null },
