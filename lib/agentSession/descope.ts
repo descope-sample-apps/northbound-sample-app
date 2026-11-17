@@ -50,6 +50,28 @@ export function resetAgentSessionCache(): void {
 }
 
 /**
+ * The issuer Descope publishes, for the documents that have to name the authorization
+ * server: the protected resource metadata for the agent API, and poppy.json.
+ *
+ * FROM THE SAME PLACE THE VERIFIER READS IT. Tokens are checked against this exact string
+ * (jwtVerify below is given `issuer`), so a document advertising a different one would
+ * send agents to get tokens this store then rejects — with nothing in the refusal to say
+ * why. Reading it here rather than from a second setting is what makes them agree.
+ *
+ * Null when DESCOPE_DISCOVERY_URL is not set or Descope cannot be reached. The caller
+ * decides what that means for its own document; this is not a place to invent an issuer.
+ */
+export async function descopeIssuer(): Promise<string | null> {
+  const discoveryUrl = process.env.DESCOPE_DISCOVERY_URL;
+  if (!discoveryUrl) return null;
+  try {
+    return (await descopeKeys(discoveryUrl)).issuer;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Asks Descope whether this token is still live, instead of trusting the signature alone.
  *
  * A signature only says the token was genuine when it was minted. Revoke the agent's

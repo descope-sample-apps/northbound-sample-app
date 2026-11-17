@@ -16,8 +16,12 @@ afterEach(() => {
   else process.env.POPPY_ISSUER = original;
 });
 
+const ORIGIN = 'https://northbound.camp';
+
 async function document() {
-  const res = await GET();
+  // The request matters now: `apis` carries absolute URLs built from the host the
+  // document was asked on, so there is no copy of it to serve without one.
+  const res = await GET(new Request(`${ORIGIN}/.well-known/poppy.json`));
   expect(res.status).toBe(200);
   expect(res.headers.get('content-type')).toContain('application/json');
   return res.json();
@@ -42,7 +46,36 @@ describe('GET /.well-known/poppy.json', () => {
         },
       },
       web: {},
+      apis: [
+        {
+          type: 'openapi',
+          url: `${ORIGIN}/api/agent/v1/openapi.json`,
+          description: 'Browse the catalog, build the cart, and place and track orders',
+        },
+      ],
     });
+  });
+
+  // A Session is only worth opening if there is somewhere to spend it. Before this entry
+  // existed the document described the store, its scopes and its issuer, and then offered
+  // an agent no URL it was allowed to call — which is the state that made an agent asked
+  // to check on an order refuse rather than answer.
+  it('advertises an API an agent is allowed to call', async () => {
+    const [api] = (await document()).apis;
+
+    expect(api.type).toBe('openapi');
+    // Absolute and on the host that served the document: agents reject a relative URL
+    // rather than resolving it, and refuse one pointing at another site.
+    expect(new URL(api.url).origin).toBe(ORIGIN);
+  });
+
+  // Served on www, the document has to say www — an agent checks the APIs it is given
+  // against the site it actually opened.
+  it('builds the API URL from the host it was asked on', async () => {
+    const res = await GET(new Request('https://www.northbound.camp/.well-known/poppy.json'));
+    const doc = await res.json();
+
+    expect(doc.apis[0].url).toBe('https://www.northbound.camp/api/agent/v1/openapi.json');
   });
 
   // The issuer lives in /.well-known/oauth-protected-resource. Unconfigured, the

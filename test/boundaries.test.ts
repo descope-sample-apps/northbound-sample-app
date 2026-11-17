@@ -46,6 +46,43 @@ const POPPY_ROUTE = join('app', '.well-known', 'poppy.json', 'route.ts');
 const AGENT_DIR = join('lib', 'agentSession');
 
 /**
+ * THE GRAFT'S SECOND HALF: the agent API.
+ *
+ * Sub-project A's design listed "any /api/* surface" as a non-goal, and this file used to
+ * assert `app/api` did not exist at all. That rule did its job — the storefront was built
+ * and shipped with no API in it, so the diff that adds one is still a graft and not
+ * something written in anticipation of ourselves. This is that diff.
+ *
+ * WHY IT HAD TO LAND HERE. northbound.camp published a Poppy document naming an issuer and
+ * two scopes and then listed no API, so an agent could sign the customer in and had
+ * nowhere to spend the Session: "where is my parka" failed as a protocol error, correctly.
+ * The orders are in this repository's database and the rules about them are in
+ * lib/services, so an API that did not reinvent both had to be here too. Agent Edge's
+ * worker could not host it — it runs in front of the site, generic to any store, with no
+ * access to an order.
+ *
+ * WHAT STAYS TRUE. The storefront itself is unchanged: not one page, action or service
+ * learned a thing about tokens. The vocabulary scan below still covers every storefront
+ * file, and these two directories are excluded the same way lib/agentSession is, because
+ * the exclusion is what makes the boundary legible — agent code is in named places, and
+ * anything outside them that reaches for a scope still fails this suite.
+ */
+const AGENT_API_DIRS = [join('app', 'api', 'agent'), join('lib', 'api')];
+
+/**
+ * The agent API's protected resource metadata (RFC 9728). It lives at a path derived from
+ * the API's own URL rather than next to it, which is why it is a storefront file by
+ * location and agent code by content.
+ */
+const AGENT_METADATA_ROUTE = join(
+  'app', '.well-known', 'oauth-protected-resource', 'api', 'agent', 'v1', 'route.ts',
+);
+
+function inAgentApi(file: string): boolean {
+  return AGENT_API_DIRS.some((dir) => file.startsWith(dir));
+}
+
+/**
  * The only storefront files that import the agent code: the session lookup, checkout's
  * step-up, login's External Authentication, the account write gate, the page that shows
  * a customer which assistants have acted for them, and the two order views that name the
@@ -79,6 +116,10 @@ describe('the Agent Edge graft stays contained', () => {
   it('is referenced only from the files listed in AGENT_AWARE_FILES', () => {
     const users = STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))
       .filter((file) => !file.startsWith(AGENT_DIR))
+      // The agent API is the graft's other half, not a storefront file reaching into it.
+      // Its own containment is the rule above: nothing outside these named directories
+      // may speak about tokens or scopes at all.
+      .filter((file) => !inAgentApi(file))
       .filter((file) => /@\/lib\/agentSession\//.test(readFileSync(file, 'utf8')))
       .sort();
     expect(users).toEqual(AGENT_AWARE_FILES);
@@ -97,7 +138,9 @@ describe('sub-project A contains no agent concepts', () => {
     for (const file of STOREFRONT_DIRS.flatMap((d) => sourceFiles(d))) {
       if (file === LEGACY_ROUTE) continue;
       if (file === POPPY_ROUTE) continue;
+      if (file === AGENT_METADATA_ROUTE) continue;
       if (file.startsWith(AGENT_DIR)) continue;
+      if (inAgentApi(file)) continue;
 
       const code = stripComments(readFileSync(file, 'utf8'));
       const matches = code.match(
@@ -109,10 +152,54 @@ describe('sub-project A contains no agent concepts', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('exposes only the two routes the spec names, and none under /api', () => {
+  // The storefront's own route surface, which has not grown: the discovery document and
+  // the legacy credential checker, exactly as before. Everything the agent API adds is
+  // under app/api/agent, and nothing else may appear under app/api at all — a route
+  // handler for the storefront's own pages would be a page, not an endpoint.
+  it('adds no routes to the storefront, and nothing under /api outside the agent API', () => {
     const routes = sourceFiles('app').filter((f) => /route\.tsx?$/.test(f)).sort();
-    expect(routes).toEqual([POPPY_ROUTE, LEGACY_ROUTE].sort());
-    expect(existsSync(join('app', 'api'))).toBe(false);
+    const storefront = routes.filter((f) => !inAgentApi(f) && f !== AGENT_METADATA_ROUTE);
+
+    expect(storefront).toEqual([POPPY_ROUTE, LEGACY_ROUTE].sort());
+    expect(sourceFiles(join('app', 'api')).filter((f) => !inAgentApi(f))).toEqual([]);
+  });
+
+  // Named one by one, so adding an endpoint is a line in this file and therefore a line
+  // in a reviewer's diff. The same reason AGENT_AWARE_FILES is a list rather than a glob.
+  it('exposes exactly the agent endpoints it means to', () => {
+    const routes = sourceFiles('app')
+      .filter((f) => /route\.tsx?$/.test(f))
+      .filter((f) => inAgentApi(f) || f === AGENT_METADATA_ROUTE)
+      .sort();
+
+    expect(routes).toEqual([
+      AGENT_METADATA_ROUTE,
+      join('app', 'api', 'agent', 'v1', 'cart', 'items', 'route.ts'),
+      join('app', 'api', 'agent', 'v1', 'cart', 'route.ts'),
+      join('app', 'api', 'agent', 'v1', 'checkout-options', 'route.ts'),
+      join('app', 'api', 'agent', 'v1', 'openapi.json', 'route.ts'),
+      join('app', 'api', 'agent', 'v1', 'orders', '[orderNumber]', 'route.ts'),
+      join('app', 'api', 'agent', 'v1', 'orders', 'route.ts'),
+      join('app', 'api', 'agent', 'v1', 'products', 'route.ts'),
+    ].sort());
+  });
+
+  // The API is a surface over the services, not a second implementation of them. Every
+  // rule about who may read an order or what a cart costs stays in lib/services, where
+  // the storefront calls the same functions — which is what keeps the two from drifting
+  // into disagreeing about the same customer's data.
+  it('builds the agent API on the services rather than on the database', () => {
+    const offenders = AGENT_API_DIRS
+      .flatMap((dir) => sourceFiles(dir))
+      .filter((file) => {
+        // A type import is not a query: shapes.ts names the row types it serializes.
+        // Only those lines are forgiven, so `import { db }` still fails.
+        const code = stripComments(readFileSync(file, 'utf8'))
+          .replace(/^import type .*$/gm, '');
+        return /@\/db\//.test(code);
+      });
+
+    expect(offenders).toEqual([]);
   });
 
   // The discovery document is a published file, not an entry point: it reads one
