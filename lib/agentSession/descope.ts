@@ -166,24 +166,45 @@ function peekClaims(token: string): Record<string, unknown> | null {
 }
 
 /**
+ * What a token amounts to here: a session, or the reason there isn't one.
+ *
+ * The reason is carried out rather than only logged so a deployment can choose to tell
+ * the agent as well (lib/api/bearer.ts, AGENT_DEBUG_REFUSALS). It is a sentence for a
+ * person, not a code to branch on — nothing should match against these strings.
+ */
+export type AgentTokenResult =
+  | { session: AgentSession; reason?: undefined }
+  | { session: null; reason: string };
+
+/**
  * One line per refusal, so a token that doesn't sign an agent in always says why.
  *
- * Every `return null` below went through here. Before, most of them were silent: a token
- * with no email claim, the wrong scopes, or no matching customer produced an agent that
- * simply wasn't signed in, with nothing in the log to say which guard turned it away.
+ * Every refusal below went through here. Before, most of them were silent: a token with
+ * no email claim, the wrong scopes, or no matching customer produced an agent that simply
+ * wasn't signed in, with nothing in the log to say which guard turned it away.
  */
-function reject(reason: string, detail?: Record<string, unknown>): null {
+function reject(reason: string, detail?: Record<string, unknown>): AgentTokenResult {
   console.warn(JSON.stringify({ event: 'agent_token_rejected', reason, ...detail }));
-  return null;
+  return { session: null, reason };
+}
+
+/**
+ * The session a token is good for, or null. The ordinary way to ask.
+ *
+ * Callers that want to explain a refusal use inspectAgentToken below; everything else
+ * only cares whether there is a session, and null is the whole answer.
+ */
+export async function resolveAgentToken(token: string): Promise<AgentSession | null> {
+  return (await inspectAgentToken(token)).session;
 }
 
 /**
  * Fails closed: no DESCOPE_DISCOVERY_URL, a bad signature, the wrong issuer or audience,
  * an expired token, a missing email or act claim, neither Northbound scope, a token Descope
- * no longer considers active, or no matching customer all resolve to null — each of them
- * naming itself on the log.
+ * no longer considers active, or no matching customer all refuse — each of them naming
+ * itself on the log, and in the `reason` this returns.
  */
-export async function resolveAgentToken(token: string): Promise<AgentSession | null> {
+export async function inspectAgentToken(token: string): Promise<AgentTokenResult> {
   // Read here rather than at the rejection below, because a token that fails verification is
   // exactly the one worth describing and jwtVerify returns no payload for it. The token itself
   // is never logged: it is a live credential, replayable against this store until it expires.
@@ -265,7 +286,7 @@ export async function resolveAgentToken(token: string): Promise<AgentSession | n
       customer: customer.id,
       scopes,
     }));
-    return { customer, agent, email: payload.email, scopes };
+    return { session: { customer, agent, email: payload.email, scopes } };
   } catch (error) {
     // Discovery, introspection and the database land here.
     return reject(String(error));

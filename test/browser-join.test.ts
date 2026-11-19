@@ -29,6 +29,10 @@ vi.mock('@/db/client', () => ({
 
 vi.mock('@/lib/agentSession/descope', () => ({
   resolveAgentToken: (token: string) => resolveAgentToken(token),
+  inspectAgentToken: async (token: string) => {
+    const session = await resolveAgentToken(token);
+    return session ? { session } : { session: null, reason: 'token carries no email claim' };
+  },
   descopeIssuer: async () => 'https://auth.northbound.camp/v1/apps/P1',
 }));
 
@@ -244,6 +248,30 @@ describe('step 2: authorizing the code', () => {
 
     expect(res.status).toBe(401);
     expect((await res.json()).error).toBe('invalid_token');
+  });
+
+  // Same bargain as the agent API: silent by default, because the reason names the guard
+  // that turned the token away, and an agent joining a browser is the flow where a silent
+  // refusal is hardest to diagnose — there is no response body for a person to read, just
+  // a browser that stays signed out.
+  it('says nothing about which guard refused the token by default', async () => {
+    delete process.env.AGENT_DEBUG_REFUSALS;
+    const { code } = await openPage();
+
+    const body = await (await authorize({ code }, { token: 'forged' })).json();
+
+    expect(body.error_description).toBe('The access token is not valid for Northbound.');
+  });
+
+  it('names the guard when AGENT_DEBUG_REFUSALS is on', async () => {
+    process.env.AGENT_DEBUG_REFUSALS = 'true';
+    const { code } = await openPage();
+
+    const res = await authorize({ code }, { token: 'forged' });
+
+    expect(res.status).toBe(401);
+    expect((await res.json()).error_description).toContain('token carries no email claim');
+    delete process.env.AGENT_DEBUG_REFUSALS;
   });
 
   it('refuses a token without poppy:browser-sign-in, naming the scope to ask for', async () => {

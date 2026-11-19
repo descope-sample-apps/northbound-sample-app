@@ -26,6 +26,40 @@ Agent Edge runs in front of the store. It recognizes agents, sends them to the f
 - **It asks before an agent buys.** Agents connect read-only. At checkout, [`lib/agentSession/stepUp.ts`](lib/agentSession/stepUp.ts) sends an agent without `orders:write` to the front door to approve that order.
 - **It won't let an agent change the account.** Northbound issues no scope for account data, so [`lib/agentSession/accountChanges.ts`](lib/agentSession/accountChanges.ts) refuses an agent that tries to edit the profile, a saved address, or a payment method. Those are the customer's own, and an agent that needs a different address can ask them. A store that wants to offer this should issue a scope for it and check that here instead.
 
+### How much of this you need
+
+Northbound does both halves — an API and signed-in browsing — because it is a sample. Most stores want only the first, and that on its own is a complete Poppy site.
+
+A discovery document needs [at least one of `agent`, `apis` or `web`](https://personalagentprotocol.org/docs/0.4/spec#fields). Naming your API and nothing else is the smallest thing that works:
+
+```json
+{
+  "protocol_version": "0.4",
+  "organization": { "name": "Northbound", "domain": "northbound.camp" },
+  "auth": {
+    "scopes": {
+      "orders:read": "See your orders and what you have in your cart",
+      "orders:write": "Place an order with your saved address and card"
+    }
+  },
+  "apis": [
+    {
+      "type": "openapi",
+      "url": "https://northbound.camp/api/agent/v1/openapi.json",
+      "description": "Browse the catalog, build the cart, and place and track orders"
+    }
+  ]
+}
+```
+
+An agent reading that signs the customer in through your OAuth server, gets a token carrying the scopes you named, and spends it on the operations your OpenAPI document describes. Everywhere else it is an ordinary visitor. Section 3.1 on the `web` field: without `browser_session_endpoint`, "Personal Agents browse the site as ordinary signed-out visitors". There is nothing to build for that — no join, no cookie, no `/poppy/browser-session` route, no `poppy:browser-sign-in` scope — and your website carries on not knowing agents exist.
+
+It isn't anonymous browsing, and you can leave that alone too. An agent that fetches a page with its own HTTP client rather than a browser sends a `Poppy-Session` header naming itself and the Session (5.2), and never an access token, so those requests are always signed out. You only have to verify the header if you act on what it claims (5.3). A store that ignores it is conformant, and a store that logs it learns which agent is reading what.
+
+Add `web.browser_session_endpoint` when you want the browser itself signed in — the customer's real cart on the screen, a checkout that doesn't start from nothing. Listing it is a promise rather than a hint: an agent that reads it **must** join before it browses, so the field and the route ship together. That is [Browser sign-in](#browser-sign-in), below.
+
+If you would rather agents stayed on the API, `"web": { "disabled": true }` says so. A document that sets it has to list `agent` or `apis`, and must not list `browser_session_endpoint`. It is a preference and not a control — you can't reliably tell an agent's browser from a person's — so it tells agents what you would like, rather than promising they won't come.
+
 ### The agent API
 
 An agent needs somewhere to spend the access it was given. Northbound publishes one at **`/api/agent/v1`**, described by an OpenAPI document at `/api/agent/v1/openapi.json`, which `/.well-known/poppy.json` advertises in its `apis` list. Without that entry an agent can sign the customer in and then has no URL it is allowed to call — so "where is my parka" fails as a protocol error instead of getting an answer.
@@ -80,6 +114,7 @@ Set these in `.env.local`, and run Agent Edge in front of the store (see its [RE
 | `AGENT_CLIENTS` | Optional. Names the products behind agent client IDs, as JSON, so `/account/assistants` can show "Muse" instead of an opaque id. Anything unlisted appears as a third-party agent. |
 | `DEMO_AUTO_SIGNUP` | `true` creates an account, with a sample address and test card, the first time a new email approves an agent. For demos. |
 | `DESCOPE_INTROSPECT_CLIENT_ID` / `_SECRET` | Optional. Set both and the store checks every request against Descope, so revoking an agent takes effect immediately instead of when its token expires. Unset, it verifies the signature offline only — then keep token lifetimes short. |
+| `AGENT_DEBUG_REFUSALS` | `true` puts the reason a token was refused into the 401 the agent reads, instead of only the log. **Never in production** — the reason names which claim disagreed or which email had no account, which is what someone holding a forged token wants to know. For demos, where an agent caught in a sign-in loop is otherwise unexplainable. |
 
 ### Changing which resource tokens are for
 

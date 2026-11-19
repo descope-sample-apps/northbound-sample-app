@@ -1,5 +1,6 @@
-import { resolveAgentToken, type AgentSession } from '@/lib/agentSession/descope';
+import { inspectAgentToken, type AgentSession } from '@/lib/agentSession/descope';
 import { ServiceError } from '@/lib/services/errors';
+import { refusedBecause } from './refusal';
 import { resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
 
 export { API_BASE_PATH, apiBaseUrl, publicOrigin, resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
@@ -148,18 +149,11 @@ export function withAgent<C = unknown>(need: Need, handler: AgentHandler<C>) {
       );
     }
 
-    const session = await resolveAgentToken(token);
+    const { session, reason } = await inspectAgentToken(token);
     if (!session) {
-      // resolveAgentToken has already written the reason to the log. It is deliberately
-      // not repeated here: the detail that explains a rejection to an operator (which
-      // claim disagreed, which customer was looked for) would tell an attacker holding a
-      // stolen or forged token exactly what to change.
-      return challenge(
-        request,
-        401,
-        'invalid_token',
-        'The access token is not valid for Northbound.',
-      );
+      // The reason is always on the log; whether the agent hears it is refusedBecause's
+      // decision, and it says no unless this deployment asked otherwise.
+      return challenge(request, 401, 'invalid_token', refusedBecause(reason));
     }
 
     if (!allows(session.scopes, need)) {
