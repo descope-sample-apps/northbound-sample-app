@@ -1,5 +1,13 @@
-import { loadEnvConfig } from '@next/env';
+// DEFAULT IMPORT, THEN DESTRUCTURE, which is not a style choice. @next/env is CommonJS
+// with no `exports` map, and `import { loadEnvConfig } from '@next/env'` fails under
+// Node 24 with "does not provide an export named 'loadEnvConfig'" — the export is there
+// at runtime, but Node's static analysis of the bundled file cannot see it, so the module
+// never loads and `pnpm db:setup` dies before it does anything. Taking the default and
+// destructuring it asks for the whole module object instead, which always works for CJS.
+import nextEnv from '@next/env';
 import { migrate } from 'drizzle-orm/libsql/migrator';
+
+const { loadEnvConfig } = nextEnv;
 
 // Read .env.local the way `next dev` and `next build` do. Without this the app and this
 // script disagree about which database they mean: Next loads .env.local, tsx does not,
