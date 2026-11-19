@@ -83,6 +83,34 @@ function inAgentApi(file: string): boolean {
 }
 
 /**
+ * THE GRAFT'S THIRD HALF: Poppy's browser join (spec section 6).
+ *
+ * The two above cover an assistant that calls the API with a token, and an assistant
+ * that arrives through Agent Edge's front door and gets its cookie. Neither is the
+ * protocol's own way onto a website. An assistant that speaks only Poppy loads a page
+ * here, has the code it is given authorized out of band, and posts it back for a
+ * cookie — three requests this store has to serve itself.
+ *
+ * WHY IT COULD NOT LIVE AT THE EDGE, which is where every other piece of agent
+ * machinery went. Step 3 has to set a cookie that means something to Northbound, and
+ * step 2 has to record which account and scopes it stands for. The worker in front has
+ * no customer, no session table and no notion of orders:write, so a join it completed
+ * would hand back a cookie this store could not read. It is the same argument that
+ * brought the agent API here: the thing being authorized lives in this database.
+ *
+ * WHY IT IS A DIRECTORY AND NOT A LINE IN AGENT_AWARE_FILES. These routes are not
+ * storefront files reaching into the graft; they ARE graft, in a named place, like
+ * app/api/agent. The storefront's own half of this change is one file — the cookie
+ * lookup in lib/auth/session-cookie.ts, already listed below — and that is the number
+ * this boundary exists to keep honest.
+ */
+const BROWSER_SESSION_DIR = join('app', 'poppy', 'browser-session');
+
+function inBrowserSession(file: string): boolean {
+  return file.startsWith(BROWSER_SESSION_DIR);
+}
+
+/**
  * The only storefront files that import the agent code: the session lookup, checkout's
  * step-up, login's External Authentication, the account write gate, the page that shows
  * a customer which assistants have acted for them, and the two order views that name the
@@ -120,6 +148,7 @@ describe('the Agent Edge graft stays contained', () => {
       // Its own containment is the rule above: nothing outside these named directories
       // may speak about tokens or scopes at all.
       .filter((file) => !inAgentApi(file))
+      .filter((file) => !inBrowserSession(file))
       .filter((file) => /@\/lib\/agentSession\//.test(readFileSync(file, 'utf8')))
       .sort();
     expect(users).toEqual(AGENT_AWARE_FILES);
@@ -141,6 +170,7 @@ describe('sub-project A contains no agent concepts', () => {
       if (file === AGENT_METADATA_ROUTE) continue;
       if (file.startsWith(AGENT_DIR)) continue;
       if (inAgentApi(file)) continue;
+      if (inBrowserSession(file)) continue;
 
       const code = stripComments(readFileSync(file, 'utf8'));
       const matches = code.match(
@@ -158,7 +188,8 @@ describe('sub-project A contains no agent concepts', () => {
   // handler for the storefront's own pages would be a page, not an endpoint.
   it('adds no routes to the storefront, and nothing under /api outside the agent API', () => {
     const routes = sourceFiles('app').filter((f) => /route\.tsx?$/.test(f)).sort();
-    const storefront = routes.filter((f) => !inAgentApi(f) && f !== AGENT_METADATA_ROUTE);
+    const storefront = routes.filter((f) =>
+      !inAgentApi(f) && !inBrowserSession(f) && f !== AGENT_METADATA_ROUTE);
 
     expect(storefront).toEqual([POPPY_ROUTE, LEGACY_ROUTE].sort());
     expect(sourceFiles(join('app', 'api')).filter((f) => !inAgentApi(f))).toEqual([]);
@@ -169,11 +200,16 @@ describe('sub-project A contains no agent concepts', () => {
   it('exposes exactly the agent endpoints it means to', () => {
     const routes = sourceFiles('app')
       .filter((f) => /route\.tsx?$/.test(f))
-      .filter((f) => inAgentApi(f) || f === AGENT_METADATA_ROUTE)
+      .filter((f) => inAgentApi(f) || inBrowserSession(f) || f === AGENT_METADATA_ROUTE)
       .sort();
 
     expect(routes).toEqual([
       AGENT_METADATA_ROUTE,
+      // Poppy section 6. Two handlers, not three: the endpoint itself serves step 1 on
+      // GET and step 3 on POST, and /authorize is step 2 — the only one of the three an
+      // assistant makes itself, and the only one that ever sees an access token.
+      join('app', 'poppy', 'browser-session', 'authorize', 'route.ts'),
+      join('app', 'poppy', 'browser-session', 'route.ts'),
       join('app', 'api', 'agent', 'v1', 'cart', 'items', 'route.ts'),
       join('app', 'api', 'agent', 'v1', 'cart', 'route.ts'),
       join('app', 'api', 'agent', 'v1', 'checkout-options', 'route.ts'),
