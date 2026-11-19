@@ -212,17 +212,20 @@ describe('the wording matches what the discovery document publishes', () => {
   // The store should not describe a permission one way to a Personal Agent and
   // another way to the customer it belongs to.
   //
-  // The discovery document is not on this branch — it is a separate PR — so this
-  // skips rather than asserting against a file that isn't here. It starts enforcing
-  // the moment that document lands, which is the moment the two can disagree.
-  const ROUTE = 'app/.well-known/poppy.json/route.ts';
+  // The document moved out of the route when Northbound started serving two protocol
+  // versions at once (§3.4): both routes publish lib/api/poppyDocument.ts, so that is
+  // where the sentences live and where this has to read them. It no longer skips — the
+  // document has landed, and a missing file here should fail loudly rather than quietly
+  // stop checking that the two agree.
+  const DOCUMENT = 'lib/api/poppyDocument.ts';
 
-  it.skipIf(!existsSync(ROUTE))('uses the same sentences as poppy.json auth.scopes', async () => {
+  it('uses the same sentences as poppy.json auth.scopes', async () => {
+    expect(existsSync(DOCUMENT), `${DOCUMENT} is where the scope wording lives`).toBe(true);
     const { scopeDescriptions } = await import('@/lib/agentSession/knownAgents');
-    const route = readFileSync(ROUTE, 'utf8');
+    const document = readFileSync(DOCUMENT, 'utf8');
 
     for (const [scope, sentence] of Object.entries(scopeDescriptions)) {
-      expect(route, `poppy.json should describe ${scope} the same way`).toContain(sentence);
+      expect(document, `poppy.json should describe ${scope} the same way`).toContain(sentence);
     }
   });
 });
