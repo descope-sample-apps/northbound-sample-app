@@ -1,5 +1,6 @@
-import { resolveAgentToken } from '@/lib/agentSession/descope';
+import { inspectAgentToken } from '@/lib/agentSession/descope';
 import { SCOPE_BROWSER_SIGN_IN, authorizeJoin } from '@/lib/agentSession/browserJoin';
+import { refusedBecause } from '@/lib/api/refusal';
 
 /**
  * The Poppy browser-session endpoint, step 2: the assistant authorizes a code.
@@ -49,12 +50,14 @@ export async function POST(request: Request): Promise<Response> {
 
   let accessToken: string | null = null;
   if (token) {
-    const session = await resolveAgentToken(token);
+    const { session, reason } = await inspectAgentToken(token);
     if (!session) {
-      // resolveAgentToken has already logged which guard turned the token away. Repeating
-      // it here would tell whoever holds a forged token what to change.
+      // The reason is always on the log; refusedBecause decides whether the agent hears
+      // it, and says no unless this deployment asked otherwise. A silent refusal is
+      // especially opaque here — nothing renders a body, just a browser that never
+      // joins — which is why the endpoint honours the same flag as the API.
       return Response.json(
-        { error: 'invalid_token', error_description: 'The access token is not valid for Northbound.' },
+        { error: 'invalid_token', error_description: refusedBecause(reason) },
         {
           status: 401,
           headers: {

@@ -1,5 +1,6 @@
 import { inspectAgentToken, type AgentSession } from '@/lib/agentSession/descope';
 import { ServiceError } from '@/lib/services/errors';
+import { refusedBecause } from './refusal';
 import { resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
 
 export { API_BASE_PATH, apiBaseUrl, publicOrigin, resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
@@ -61,50 +62,6 @@ function challenge(
       },
     },
   );
-}
-
-/** What an agent is told when its token is refused. */
-const REFUSED = 'The access token is not valid for Northbound.';
-
-/**
- * The refusal, with the reason appended when this deployment has asked for it.
- *
- * OFF BY DEFAULT, AND THAT IS THE RIGHT DEFAULT. The reason names which claim disagreed,
- * or which email had no account — the exact detail that tells whoever is holding a forged
- * or stolen token what to change next. In production an agent gets one sentence and the
- * operator reads `agent_token_rejected` on the log.
- *
- * ON, IT IS WORTH THE TRADE IN A DEMO OR A STAGING DEPLOYMENT. Without it, an agent that
- * signs in, is refused, refreshes, is refused again and falls back to another sign-in
- * looks like a loop with no cause — and the one fact that would end it, usually that the
- * token's email has no account here, is sitting in a log nobody watching the demo can
- * reach. Set AGENT_DEBUG_REFUSALS=true and the agent says it out loud.
- *
- * Exactly the string "true". A flag that also accepted "1", "yes" or "TRUE" would
- * eventually be on somewhere nobody meant it to be.
- *
- * FLATTENED FIRST, BECAUSE THIS ENDS UP IN A HEADER. A reason is whatever went wrong,
- * including a stringified error, and those are not always one line — a database failure
- * arrives as `Failed query: select ...\nparams: ...`. `challenge` writes the description
- * into WWW-Authenticate, where a newline is header injection; undici rejects the value
- * outright, so an unflattened reason turns a 401 into a 500 and the agent learns nothing
- * at all. So everything outside printable ASCII becomes a space — that covers the
- * newlines, and also the characters a header simply cannot carry, since a header value
- * is a ByteString and anything above U+00FF throws the same way a newline does. A
- * customer's name or an email with an accent in it can reach a reason, so this is not
- * hypothetical. Then runs of whitespace collapse and the whole thing is capped, so one
- * enormous SQL error cannot crowd out the header.
- */
-const REASON_LIMIT = 200;
-
-function refusedBecause(reason: string): string {
-  if (process.env.AGENT_DEBUG_REFUSALS !== 'true') return REFUSED;
-
-  const flat = reason.replace(/[^ -~]+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!flat) return REFUSED;
-
-  const short = flat.length > REASON_LIMIT ? `${flat.slice(0, REASON_LIMIT - 3)}...` : flat;
-  return `${REFUSED.slice(0, -1)} (${short}).`;
 }
 
 /** The token from `Authorization: Bearer …`, or null. The scheme is case-insensitive. */
