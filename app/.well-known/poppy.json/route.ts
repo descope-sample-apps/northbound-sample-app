@@ -50,22 +50,40 @@ export async function GET(request: Request) {
       scopes: {
         'orders:read': 'See your orders and what you have in your cart',
         'orders:write': 'Place an order with your saved address and card',
+        // §6's scope, in the words it is approved in. Northbound's website applies the
+        // cookie's scopes rather than treating this as the run of the account, so it
+        // allows nothing the two above don't — which is exactly what it has to say.
+        'poppy:browser-sign-in':
+          'Browse the store signed in to your account, doing only what the permissions above allow',
       },
       // How much is at stake, so an agent can tell before it asks. `changes` is the most
       // consequential thing the scope allows, and buying is not undoable.
       scope_hints: {
         'orders:read': { changes: 'none', personal_data: true },
         'orders:write': { changes: 'irreversible', personal_data: true },
+        // Nothing on its own: signing the browser in is not itself a change, and what
+        // the browser may then do is whatever the other scopes already said.
+        'poppy:browser-sign-in': { changes: 'none', personal_data: true },
       },
     },
 
     // A website, and §3.1 requires at least one of `agent`, `apis` or `web`.
     //
-    // No `browser_session_endpoint`: Northbound doesn't implement §6 browser join. Its
-    // agents reach the site through Agent Edge's own cookie instead, which is why there
-    // is no `poppy:browser-sign-in` scope above — 0.4 ties that scope to this endpoint,
-    // and a Personal Agent only requests it from a store that lists one.
-    web: {},
+    // LISTING THIS IS A PROMISE, NOT A HINT. §6: once a Company lists the endpoint, a
+    // Personal Agent MUST join its browser to a Session before browsing the website. An
+    // agent that has read this document and finds nothing at the URL has lost browsing
+    // that worked before, so the field goes in only alongside a route that answers —
+    // app/poppy/browser-session, which test/poppy-discovery.test.ts checks is there.
+    //
+    // NO `unscoped`. That flag is for a website where `poppy:browser-sign-in` means
+    // everything the account can do. Here checkout still sends an agent without
+    // orders:write to the front door (lib/agentSession/stepUp.ts) and account changes
+    // are still refused (lib/agentSession/accountChanges.ts), so the cookie's scopes
+    // apply, and claiming otherwise would ask customers to approve far more than this
+    // grants.
+    web: {
+      browser_session_endpoint: `${publicOrigin(request)}/poppy/browser-session`,
+    },
 
     // WHAT MAKES THE SESSION SPENDABLE. `web: {}` on its own says an agent may browse
     // Northbound signed out, and nothing more: a Session opened against this document had
