@@ -96,6 +96,32 @@ describe('resolving a Descope agent token', () => {
     delete process.env.DESCOPE_DISCOVERY_URL;
     expect(await resolveAgentToken(await token())).toBeNull();
   });
+
+  // The reason is what a deployment can choose to show the agent (AGENT_DEBUG_REFUSALS),
+  // so it has to name the guard rather than say "invalid". These are the two refusals
+  // that look identical from outside and are the usual cause of an agent that signs in,
+  // is refused, and signs in again: an account that isn't here, and a scope that wasn't
+  // approved. A reason that didn't tell them apart would leave the loop unexplained.
+  it('says which guard turned a token away', async () => {
+    const { inspectAgentToken } = await import('@/lib/agentSession/descope');
+
+    const unknown = await inspectAgentToken(await token({ email: 'nobody@example.com' }));
+    expect(unknown.session).toBeNull();
+    expect(unknown.reason).toContain('no Northbound customer with that email');
+
+    const unscoped = await inspectAgentToken(await token({ scope: 'openid email' }));
+    expect(unscoped.session).toBeNull();
+    expect(unscoped.reason).toContain('orders:read');
+  });
+
+  it('carries no reason when the token is good', async () => {
+    const { inspectAgentToken } = await import('@/lib/agentSession/descope');
+
+    const good = await inspectAgentToken(await token({ email: 'ALICE@example.com' }));
+
+    expect(good.session?.customer.id).toBe(82731);
+    expect(good.reason).toBeUndefined();
+  });
 });
 
 describe('the storefront with an agent cookie', () => {

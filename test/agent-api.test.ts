@@ -27,6 +27,14 @@ vi.mock('@/db/client', () => ({
 
 vi.mock('@/lib/agentSession/descope', () => ({
   resolveAgentToken: (token: string) => resolveAgentToken(token),
+  // The routes ask through inspectAgentToken, which is resolveAgentToken plus the reason
+  // a refusal happened. These tests are about which scope each route demands, not about
+  // what a refusal says, so the reason is a placeholder — test/token-refusal-reasons.test.ts
+  // is where it means anything.
+  inspectAgentToken: async (token: string) => {
+    const session = await resolveAgentToken(token);
+    return session ? { session } : { session: null, reason: 'not a token this test accepts' };
+  },
   descopeIssuer: async () => 'https://auth.northbound.camp/v1/apps/P1',
 }));
 

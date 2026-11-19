@@ -96,6 +96,7 @@ Set these in `.env.local`, and run Agent Edge in front of the store (see its [RE
 | `AGENT_CLIENTS` | Optional. Names the products behind agent client IDs, as JSON, so `/account/assistants` can show "Muse" instead of an opaque id. Anything unlisted appears as a third-party agent. |
 | `DEMO_AUTO_SIGNUP` | `true` creates an account, with a sample address and test card, the first time a new email approves an agent. For demos. |
 | `DESCOPE_INTROSPECT_CLIENT_ID` / `_SECRET` | Optional. Set both and the store checks every request against Descope, so revoking an agent takes effect immediately instead of when its token expires. Unset, it verifies the signature offline only — then keep token lifetimes short. |
+| `AGENT_DEBUG_REFUSALS` | `true` puts the reason a token was refused into the 401 the agent reads, instead of only the log. **Never in production** — the reason names which claim disagreed or which email had no account, which is what someone holding a forged token wants to know. For demos, where an agent caught in a sign-in loop is otherwise unexplainable. |
 
 ### Changing which resource tokens are for
 
