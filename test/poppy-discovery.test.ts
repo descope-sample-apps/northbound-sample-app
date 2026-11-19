@@ -31,9 +31,10 @@ describe('GET /.well-known/poppy.json', () => {
   // The version an agent checks first. Pre-1.0, compatibility needs an exact
   // major.minor match (§3.4), so a document on an older draft isn't read and ignored,
   // it's refused outright. That makes this assertion the whole file.
-  it('serves a draft 0.4 document', async () => {
+  it('serves a 1.0 document, with 0.4 still linked', async () => {
     expect(await document()).toEqual({
-      protocol_version: '0.4',
+      protocol_version: '1.0',
+      supported_versions: { '0.4': `${ORIGIN}/poppy/0.4.json` },
       organization: { name: 'Northbound', domain: 'northbound.camp' },
       auth: {
         scopes: {
@@ -215,5 +216,67 @@ describe('GET /.well-known/poppy.json', () => {
   // and setting it here would ask customers to approve far more than it grants.
   it('does not claim browsing is unscoped', async () => {
     expect((await document()).web).not.toHaveProperty('unscoped');
+  });
+});
+
+describe('serving 0.4 beside 1.0', () => {
+  async function linked(origin = ORIGIN) {
+    const { GET: LINKED } = await import('@/app/poppy/0.4.json/route');
+    const res = await LINKED(new Request(`${origin}/poppy/0.4.json`));
+    expect(res.status).toBe(200);
+    return res.json();
+  }
+
+  // Before 1.0 two versions are compatible only on an exact major.minor match (§3.4),
+  // so bumping to 1.0 alone would not be an upgrade for a 0.4 agent — it would be a
+  // door closing. The old document stays served at its own URL.
+  it('serves the 0.4 document at the URL the new one names', async () => {
+    expect((await linked()).protocol_version).toBe('0.4');
+  });
+
+  // "The document there has the protocol_version it is listed under, and no
+  // supported_versions." A chain of documents pointing at each other is not a thing an
+  // agent follows.
+  it('does not link on from the linked document', async () => {
+    expect(await linked()).not.toHaveProperty('supported_versions');
+  });
+
+  // "Every document a Company serves at the same time MUST have the same
+  // organization.domain and select the same issuer", so that a version bump does not
+  // change who the Company is — and with it every User ID and refresh token.
+  it('is the same Company as the 1.0 document', async () => {
+    const [current, old] = [await document(), await linked()];
+
+    expect(old.organization).toEqual(current.organization);
+    expect(old.auth.issuer).toEqual(current.auth.issuer);
+  });
+
+  // Same store, so the same things to do in it. §6's join is identical in both.
+  it('offers the same ways in', async () => {
+    const [current, old] = [await document(), await linked()];
+
+    expect(old.web).toEqual(current.web);
+    expect(old.apis).toEqual(current.apis);
+  });
+
+  it('is reached at a URL on the host that served poppy.json', async () => {
+    const doc = await document();
+    const url = new URL(doc.supported_versions['0.4']);
+
+    // "The Personal Agent MUST NOT use a document whose URL is on another host."
+    expect(url.host).toBe(doc.organization.domain);
+    expect(url.protocol).toBe('https:');
+  });
+
+  // Each URL in supported_versions MUST be HTTPS. A dev server is not, so rather than
+  // publish a URL the spec forbids, the document simply offers one version there — the
+  // link is a promise about where an old document lives, and http is not a place it may
+  // live.
+  it('offers no older version over http, rather than an http URL', async () => {
+    const res = await GET(new Request('http://localhost:3000/.well-known/poppy.json'));
+    const doc = await res.json();
+
+    expect(doc.protocol_version).toBe('1.0');
+    expect(doc).not.toHaveProperty('supported_versions');
   });
 });

@@ -325,4 +325,37 @@ describe('the scopes an agent needs to sign in', () => {
     expect(await resolveAgentToken(await token({ scope: undefined }))).toBeNull();
     expect(await resolveAgentToken(await token({ scope: 'orders:readonly' }))).toBeNull();
   });
+
+  /**
+   * THIS RULE IS LOAD-BEARING FOR THE WEBSITE, NOT JUST THE API, and nothing else says so.
+   *
+   * No page checks scopes. `requireCustomer()` asks whether there is a customer, and the
+   * order pages, the cart and the account pages render for whoever that is. Only two
+   * things are gated: placing an order (stepUp.ts) and changing account data
+   * (accountChanges.ts), both of them writes.
+   *
+   * Reading is in scope anyway — but only because of the rule above. Every token this
+   * store accepts carries orders:read or orders:write, so every agent browsing the site
+   * was already allowed to see the customer's orders. Relax that floor, say to let a
+   * token with only poppy:browser-sign-in through, and the order pages start showing an
+   * agent history it was never granted, with no error and nothing in a diff to notice.
+   *
+   * poppy.json omits `web.unscoped`, which claims the website applies the cookie's
+   * scopes (section 6). This is the whole of what makes that claim true for reads.
+   */
+  it('lets nothing through that could browse without read access', async () => {
+    const { resolveAgentToken } = await import('@/lib/agentSession/descope');
+
+    // The scope a browser join asks for, on its own. It signs a browser in; it does not
+    // grant reading, and this store has no page that would check.
+    expect(await resolveAgentToken(await token({ scope: 'poppy:browser-sign-in' }))).toBeNull();
+    expect(await resolveAgentToken(await token({ scope: 'openid poppy:browser-sign-in' }))).toBeNull();
+
+    // With a read scope beside it, it is an ordinary signed-in agent.
+    const joined = await resolveAgentToken(
+      await token({ scope: 'orders:read poppy:browser-sign-in' }),
+    );
+    expect(joined?.scopes).toContain('poppy:browser-sign-in');
+    expect(joined?.scopes).toContain('orders:read');
+  });
 });

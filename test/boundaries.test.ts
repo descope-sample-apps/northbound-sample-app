@@ -38,6 +38,17 @@ const LEGACY_ROUTE = join('app', 'legacy-auth', 'verify', 'route.ts');
 const POPPY_ROUTE = join('app', '.well-known', 'poppy.json', 'route.ts');
 
 /**
+ * The same document for the older protocol version, which §3.4 has a Company serve
+ * beside the current one so agents move at their own pace. A second published file, not
+ * a second implementation: both routes call lib/api/poppyDocument.ts, because §3.4 makes
+ * it a MUST that every version served at once names the same Company.
+ */
+const LINKED_POPPY_ROUTE = join('app', 'poppy', '0.4.json', 'route.ts');
+
+/** Where the document itself lives, which both routes publish and neither builds. */
+const POPPY_DOCUMENT = join('lib', 'api', 'poppyDocument.ts');
+
+/**
  * THE GRAFT. Agent access arrives through Agent Edge's Cloudflare Worker and front
  * door, which hand the agent's browser a Descope token in a cookie. Everything else
  * an agent needs happens at the edge, so all of Northbound's agent code is token
@@ -191,7 +202,7 @@ describe('sub-project A contains no agent concepts', () => {
     const storefront = routes.filter((f) =>
       !inAgentApi(f) && !inBrowserSession(f) && f !== AGENT_METADATA_ROUTE);
 
-    expect(storefront).toEqual([POPPY_ROUTE, LEGACY_ROUTE].sort());
+    expect(storefront).toEqual([POPPY_ROUTE, LINKED_POPPY_ROUTE, LEGACY_ROUTE].sort());
     expect(sourceFiles(join('app', 'api')).filter((f) => !inAgentApi(f))).toEqual([]);
   });
 
@@ -242,9 +253,13 @@ describe('sub-project A contains no agent concepts', () => {
   // environment variable and returns JSON. If it ever imports the agent code, it has
   // stopped being a document and this rule should start failing again.
   it('serves the discovery document without reaching into the agent code', () => {
-    const code = stripComments(readFileSync(POPPY_ROUTE, 'utf8'));
-    expect(code).not.toMatch(/@\/lib\/agentSession\//);
-    expect(code).not.toMatch(/\bdb\b|drizzle/);
+    // Both routes and the document they publish. Moving the body into lib/api did not
+    // move this rule: if it ever imports the agent code, it has stopped being a document.
+    for (const file of [POPPY_ROUTE, LINKED_POPPY_ROUTE, POPPY_DOCUMENT]) {
+      const code = stripComments(readFileSync(file, 'utf8'));
+      expect(code, file).not.toMatch(/@\/lib\/agentSession\//);
+      expect(code, file).not.toMatch(/\bdb\b|drizzle/);
+    }
   });
 });
 
