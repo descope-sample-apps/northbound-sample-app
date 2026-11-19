@@ -83,6 +83,24 @@ The storefront did not change to get this. The endpoints call the same [`lib/ser
 
 Northbound also shows the customer who has been shopping for them. Every agent that signs in is recorded in `known_agents`, and **/account/assistants** lists each one with what it is allowed to do, when it was approved, when it was last active, and how many orders it placed. Checkout saves the token's `act.sub` with the order, so order history marks those orders "By your AI assistant" and the two lists name the same agent the same way.
 
+### Browser sign-in
+
+The API covers an agent that can call an API. [Poppy section 6](https://personalagentprotocol.org/docs/1.0/spec.md) covers one that drives a browser, and `/.well-known/poppy.json` now advertises it as `web.browser_session_endpoint`. Listing that field is a promise: an agent that reads it **must** join before it browses, so the entry and the route land together.
+
+A join takes three requests from two callers who never meet.
+
+1. The agent's browser loads **`GET /poppy/browser-session`** and gets a page with a one-time code, plus a `__Host-poppy_join` cookie that ties the code to that browser. The code lives a minute.
+2. The agent itself posts the code to **`POST /poppy/browser-session/authorize`** with its `Poppy-Session` header and, to sign in, its access token. The token needs `poppy:browser-sign-in`, and a token without it gets a 403 naming the scope. **The browser never sees the token.**
+3. The browser posts the form back to **`POST /poppy/browser-session`**. Only if the cookie matches the code and the agent authorized it does the store set `__Host-nb_agent_browser` and redirect.
+
+Neither caller can finish alone, which is the whole point. An attacker who authorizes a code in their own browser and then gets a victim's browser to post it fails at step 3, because the victim's browser carries a different join cookie — the forgery [section 10.6](https://personalagentprotocol.org/docs/1.0/spec.md) exists to stop. The code is spent by the first submission whatever its result, so there is nothing to retry.
+
+The cookie is opaque. [`lib/agentSession/browserJoin.ts`](lib/agentSession/browserJoin.ts) holds the token server-side and re-checks it on every request, so disconnecting the assistant at Descope stops the browser acting immediately rather than when the cookie expires. Signing out on the website ends the join too.
+
+**Browsing is scoped, not a free pass.** `poppy:browser-sign-in` lets an agent browse as the customer and nothing more: checkout still sends an agent without `orders:write` to the front door, and account changes are still refused. A joined browser comes out of `getAgentSession()` as the same session a bearer token produces, so [`stepUp.ts`](lib/agentSession/stepUp.ts) and [`accountChanges.ts`](lib/agentSession/accountChanges.ts) gate it with no new policy code. That is why `poppy.json` does not set `web.unscoped`, which is for a store where the scope means the run of the account.
+
+This is separate from Agent Edge's `DS` cookie, which is the front door's own mechanism rather than the protocol's. Both resolve to the same session; `DS` wins when a browser somehow has both. For the join to be live on a site behind Agent Edge, the worker has to advertise it too — set its `POPPY_BROWSER_SESSION_ENDPOINT` to `/poppy/browser-session`.
+
 Set these in `.env.local`, and run Agent Edge in front of the store (see its [README](https://github.com/descope/agent-edge)):
 
 | Variable | Value |

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GET } from '@/app/.well-known/poppy.json/route';
 
@@ -39,13 +39,16 @@ describe('GET /.well-known/poppy.json', () => {
         scopes: {
           'orders:read': 'See your orders and what you have in your cart',
           'orders:write': 'Place an order with your saved address and card',
+          'poppy:browser-sign-in':
+            'Browse the store signed in to your account, doing only what the permissions above allow',
         },
         scope_hints: {
           'orders:read': { changes: 'none', personal_data: true },
           'orders:write': { changes: 'irreversible', personal_data: true },
+          'poppy:browser-sign-in': { changes: 'none', personal_data: true },
         },
       },
-      web: {},
+      web: { browser_session_endpoint: `${ORIGIN}/poppy/browser-session` },
       apis: [
         {
           type: 'openapi',
@@ -162,14 +165,55 @@ describe('GET /.well-known/poppy.json', () => {
   });
 
   // The document is a promise about what a token can do here. These are the scopes the
-  // resolver actually accepts, and advertising one it rejects would be a lie an agent
-  // only discovers after the customer has approved it.
-  it('describes only scopes the store accepts', async () => {
-    const resolver = readFileSync(join(process.cwd(), 'lib', 'agentSession', 'descope.ts'), 'utf8');
+  // store actually enforces, and advertising one it ignores would be a lie an agent only
+  // discovers after the customer has approved it.
+  //
+  // TWO FILES, BECAUSE TWO THINGS ENFORCE. The orders scopes are what the token resolver
+  // demands of every token; poppy:browser-sign-in is demanded by the browser-session
+  // endpoint instead (section 6), and a token carrying only it still is not signed in
+  // here. Reading just the resolver would have called the browser scope undefined.
+  it('describes only scopes the store enforces', async () => {
+    const enforcers = [
+      join('lib', 'agentSession', 'descope.ts'),
+      join('lib', 'agentSession', 'browserJoin.ts'),
+    ].map((path) => readFileSync(join(process.cwd(), path), 'utf8')).join('\n');
     const { auth } = await document();
 
     for (const scope of Object.keys(auth.scopes)) {
-      expect(resolver).toContain(`'${scope}'`);
+      expect(enforcers).toContain(`'${scope}'`);
     }
+  });
+
+  // ADVERTISING THE ENDPOINT IS A PROMISE, not a hint. Section 6: when a Company lists
+  // it, "the Personal Agent MUST join its browser to a Session before browsing the
+  // Company's website". A URL here that does not answer breaks browsing that worked.
+  it('advertises the browser-session endpoint the store actually serves', async () => {
+    const doc = await document();
+
+    expect(doc.web.browser_session_endpoint).toBe(`${ORIGIN}/poppy/browser-session`);
+    expect(existsSync(join(process.cwd(), 'app', 'poppy', 'browser-session', 'route.ts'))).toBe(true);
+    expect(existsSync(join(process.cwd(), 'app', 'poppy', 'browser-session', 'authorize', 'route.ts'))).toBe(true);
+  });
+
+  // The join only works where the cookie step 3 sets reaches the pages being browsed,
+  // so the endpoint has to be on the host the document names — the same invariant the
+  // API URL is held to above.
+  it('puts the browser-session endpoint on the domain it names', async () => {
+    for (const forwarded of ['www.northbound.camp', 'northbound.camp', 'preview-x1.vercel.app']) {
+      const res = await GET(new Request('https://northbound.camp/.well-known/poppy.json', {
+        headers: { 'x-forwarded-host': forwarded, 'x-forwarded-proto': 'https' },
+      }));
+      const doc = await res.json();
+
+      expect(new URL(doc.web.browser_session_endpoint).host).toBe(doc.organization.domain);
+    }
+  });
+
+  // Northbound's website applies the cookie's scopes — checkout still asks for
+  // orders:write, and account changes are still refused. Section 6 reserves
+  // `web.unscoped` for a site where the scope means the account's full access instead,
+  // and setting it here would ask customers to approve far more than it grants.
+  it('does not claim browsing is unscoped', async () => {
+    expect((await document()).web).not.toHaveProperty('unscoped');
   });
 });

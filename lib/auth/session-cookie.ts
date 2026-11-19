@@ -4,6 +4,11 @@ import { redirect } from 'next/navigation';
 import type { Customer } from '@/db/schema';
 import { resolveSession, SESSION_COOKIE, SESSION_TTL_MS } from './session';
 import { resolveAgentToken, type AgentSession } from '@/lib/agentSession/descope';
+import {
+  BROWSER_SESSION_COOKIE,
+  endBrowserJoin,
+  resolveBrowserJoin,
+} from '@/lib/agentSession/browserJoin';
 
 /** The cookie the Agent Edge front door sets in an agent's browser. */
 const AGENT_COOKIE = process.env.AGENT_SESSION_COOKIE || 'DS';
@@ -29,8 +34,20 @@ export const getHumanCustomer = cache(async (): Promise<Customer | null> => {
  */
 export const getAgentSession = cache(async (): Promise<AgentSession | null> => {
   if (await getHumanCustomer()) return null;
-  const token = (await cookies()).get(AGENT_COOKIE)?.value;
-  return token ? resolveAgentToken(token) : null;
+  const jar = await cookies();
+
+  // Agent Edge's front door, which puts the Descope access token in the cookie itself.
+  const token = jar.get(AGENT_COOKIE)?.value;
+  if (token) return resolveAgentToken(token);
+
+  // Poppy's own browser join (section 6). The cookie here is opaque — the token it
+  // stands for never reached the browser — so resolving it is a lookup and then the
+  // same token check, which is what makes a joined browser and a bearer token come out
+  // of this function as the same AgentSession. Everything downstream that reads scopes
+  // (lib/agentSession/stepUp.ts, lib/agentSession/accountChanges.ts) therefore gates
+  // browsing without knowing the join exists.
+  const joined = jar.get(BROWSER_SESSION_COOKIE)?.value;
+  return joined ? resolveBrowserJoin(joined) : null;
 });
 
 /** The customer this request acts for, whether they're here themselves or through an agent. */
@@ -55,7 +72,17 @@ export async function setSessionCookie(token: string): Promise<void> {
 }
 
 export async function clearSessionCookie(): Promise<void> {
-  (await cookies()).delete(SESSION_COOKIE);
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
   // Signing out from an agent's browser ends the agent's session here too.
-  (await cookies()).delete(AGENT_COOKIE);
+  jar.delete(AGENT_COOKIE);
+
+  // And its Poppy join, which section 6 lists among the things that end the Session's
+  // sign-in. Revoked server-side as well as dropped, so a copy of the cookie is dead:
+  // deleting it only asks the browser to forget it.
+  const joined = jar.get(BROWSER_SESSION_COOKIE)?.value;
+  if (joined) {
+    await endBrowserJoin(joined);
+    jar.delete(BROWSER_SESSION_COOKIE);
+  }
 }
