@@ -1,4 +1,4 @@
-import { withAgent, readJson, badRequest, jsonResponse } from '@/lib/api/bearer';
+import { withAgent, readJson, badRequest, jsonResponse, publicOrigin } from '@/lib/api/bearer';
 import { cartShape } from '@/lib/api/shapes';
 import { addToCart, getCart, updateCartItem } from '@/lib/services/cart';
 import { getProductBySlug } from '@/lib/services/catalog';
@@ -49,6 +49,6 @@ export const POST = withAgent('write', async (request, session) => {
   return jsonResponse({
     acting_for: session.email,
     actor: session.agent,
-    cart: cartShape(await getCart(owner)),
+    cart: cartShape(await getCart(owner), publicOrigin(request)),
   });
 });
