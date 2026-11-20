@@ -154,6 +154,19 @@ describe('the customer app API', () => {
     for (const [, value] of res.headers) expect(value).not.toContain('resource_metadata');
   });
 
+  it("says no_account for a verified customer token the store has no account for", async () => {
+    const { GET } = await import('@/app/api/app/v1/orders/route');
+    const res = await GET(await get('/orders', await token({ email: 'stranger@example.com' })), noContext);
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe('no_account');
+  });
+
+  it('says invalid_token, not no_account, for an agent token whose email has no account', async () => {
+    const { GET } = await import('@/app/api/app/v1/orders/route');
+    const res = await GET(await get('/orders', await token({ email: 'stranger@example.com', act: { sub: 'a' } })), noContext);
+    expect((await res.json()).error).toBe('invalid_token');
+  });
+
   it('is not advertised to agents', async () => {
     const poppy = (await import('@/app/.well-known/poppy.json/route')).GET;
     const openapi = (await import('@/app/api/agent/v1/openapi.json/route')).GET;

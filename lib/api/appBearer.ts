@@ -1,5 +1,5 @@
 import type { Customer } from '@/db/schema';
-import { resolveCustomerToken } from '@/lib/appSession/descope';
+import { inspectCustomerToken } from '@/lib/appSession/descope';
 import { ServiceError } from '@/lib/services/errors';
 import { jsonResponse, statusFor } from './bearer';
 
@@ -19,8 +19,13 @@ export function withCustomer<C = unknown>(
   return async (request: Request, context: C): Promise<Response> => {
     const header = request.headers.get('authorization') ?? '';
     const match = /^Bearer\s+(\S+)$/i.exec(header);
-    const session = match ? await resolveCustomerToken(match[1]) : null;
-    if (!session) return jsonResponse({ error: 'invalid_token' }, 401);
+    const result = match ? await inspectCustomerToken(match[1]) : { session: null, noAccount: false };
+    const session = result.session;
+    if (!session) {
+      // no_account lets the app tell a signed-in customer why it can't show their orders,
+      // instead of signing them out and back in to the same refusal.
+      return jsonResponse({ error: result.noAccount ? 'no_account' : 'invalid_token' }, 401);
+    }
     try {
       return await handler(request, session, context);
     } catch (error) {

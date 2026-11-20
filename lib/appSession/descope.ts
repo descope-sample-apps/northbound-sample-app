@@ -42,13 +42,27 @@ function acceptedIssuers(projectId: string): string[] {
   return configured?.length ? configured : [`${baseUrl()}/${projectId}`, projectId];
 }
 
-function reject(reason: string): null {
+/**
+ * A refusal, and whether it is the one the app can explain: a genuine customer session the
+ * store has no account for (or that carries no email to find one by). Everything else is
+ * just invalid. noAccount is only ever true after the token has passed every agent check,
+ * so it tells an agent nothing.
+ */
+export type CustomerTokenResult =
+  | { session: CustomerSession; noAccount?: undefined }
+  | { session: null; noAccount: boolean };
+
+function reject(reason: string, noAccount = false): CustomerTokenResult {
   console.warn(JSON.stringify({ event: 'app_token_rejected', reason }));
-  return null;
+  return { session: null, noAccount };
 }
 
 /** The customer a session token belongs to, or null. Fails closed. */
 export async function resolveCustomerToken(token: string): Promise<CustomerSession | null> {
+  return (await inspectCustomerToken(token)).session;
+}
+
+export async function inspectCustomerToken(token: string): Promise<CustomerTokenResult> {
   const projectId = process.env.DESCOPE_PROJECT_ID;
   if (!projectId) return reject('DESCOPE_PROJECT_ID is not set');
 
@@ -65,7 +79,7 @@ export async function resolveCustomerToken(token: string): Promise<CustomerSessi
     return reject('token is from an inbound app, so it is an agent token');
   }
   if (typeof payload.email !== 'string' || !payload.email) {
-    return reject('no email claim; add it to the session JWT template');
+    return reject('no email claim; add it to the session JWT template', true);
   }
 
   const email = payload.email;
@@ -75,7 +89,7 @@ export async function resolveCustomerToken(token: string): Promise<CustomerSessi
   const customer = existing ?? (process.env.DEMO_AUTO_SIGNUP === 'true'
     ? await createDemoCustomer(email, typeof payload.name === 'string' ? payload.name : undefined)
     : undefined);
-  if (!customer) return reject('no Northbound customer with that email');
+  if (!customer) return reject('no Northbound customer with that email', true);
 
-  return { customer, email };
+  return { session: { customer, email } };
 }
