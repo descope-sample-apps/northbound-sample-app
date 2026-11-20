@@ -116,6 +116,19 @@ Set these in `.env.local`, and run Agent Edge in front of the store (see its [RE
 | `DESCOPE_INTROSPECT_CLIENT_ID` / `_SECRET` | Optional. Set both and the store checks every request against Descope, so revoking an agent takes effect immediately instead of when its token expires. Unset, it verifies the signature offline only — then keep token lifetimes short. |
 | `AGENT_DEBUG_REFUSALS` | `true` puts the reason a token was refused into the 401 the agent reads, instead of only the log. **Never in production** — the reason names which claim disagreed or which email had no account, which is what someone holding a forged token wants to know. For demos, where an agent caught in a sign-in loop is otherwise unexplainable. |
 
+### The app API
+
+The Northbound iPhone app shows customers their orders and the assistants shopping for them, and approves agents' requests by push. It reads **`/api/app/v1`**, which is for the customer in person, not for agents:
+
+| Operation | Returns |
+| --- | --- |
+| `GET /me` | The customer's name and email |
+| `GET /orders`, `GET /orders/{orderNumber}` | Order history and detail, with `placed_by_agent` |
+| `GET /assistants` | The same list as `/account/assistants` |
+| `GET /categories` | Catalog categories |
+
+It takes the customer's own Descope session token as `Authorization: Bearer`, verified against the project's keys ([`lib/appSession/descope.ts`](lib/appSession/descope.ts)). A token that names an actor (`act`) or comes from an inbound app is an agent's, and is refused with a 401 however valid it is. A refusal carries no `WWW-Authenticate` challenge, and the API isn't in `poppy.json`, the OpenAPI document or the protected resource metadata, so an agent has no way to find it. Set `DESCOPE_PROJECT_ID`, and add the user's `email` to the project's session JWT template.
+
 ### Changing which resource tokens are for
 
 `DESCOPE_AUDIENCE` is checked here and minted by the front door's `RESOURCE`, in two separately deployed places, and a token is good for about an hour. Change one value and whichever deploys second spends that hour rejecting every agent that is already signed in. There is no ordering of a single value that avoids it.
