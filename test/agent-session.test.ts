@@ -114,6 +114,30 @@ describe('resolving a Descope agent token', () => {
     expect(unscoped.reason).toContain('orders:read');
   });
 
+  // A REASON MUST NOT DEPEND ON A CLASS NAME. String(error) prints error.name, and jose
+  // sets name from this.constructor.name — which Next.js's minifier renames in the server
+  // bundle. On northbound.camp that turned "JWSInvalid: JWS Protected Header is invalid"
+  // into "i: JWS Protected Header is invalid": the one word identifying the failure, gone,
+  // in the one mode where anyone is reading these. jose's `code` is a string literal and
+  // survives, so the reason is built from it.
+  //
+  // This test cannot run the minifier, so it pins the contract instead: when the error
+  // carries a code, the reason leads with that code rather than with a class name.
+  it('names a jose failure by its stable code, not by a minifiable class name', async () => {
+    const { inspectAgentToken } = await import('@/lib/agentSession/descope');
+
+    const garbled = await inspectAgentToken('not-a-jwt');
+    expect(garbled.session).toBeNull();
+    expect(garbled.reason).toMatch(/^ERR_[A-Z_]+: /);
+    expect(garbled.reason).not.toMatch(/^JWS/);
+
+    const wrongIssuer = await inspectAgentToken(await token({}, { issuer: 'https://evil.test' }));
+    expect(wrongIssuer.session).toBeNull();
+    expect(wrongIssuer.reason).toMatch(/^ERR_[A-Z_]+: /);
+    // The message is the half that always survived, and it is still here.
+    expect(wrongIssuer.reason).toContain('iss');
+  });
+
   it('carries no reason when the token is good', async () => {
     const { inspectAgentToken } = await import('@/lib/agentSession/descope');
 

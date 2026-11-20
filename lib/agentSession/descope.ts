@@ -175,6 +175,32 @@ function peekClaims(token: string): Record<string, unknown> | null {
 }
 
 /**
+ * An error as a line of a refusal: its code if it has one, else its name, then its message.
+ *
+ * NOT String(error), WHICH LIES IN A PRODUCTION BUILD. `String(error)` prints `error.name`,
+ * and jose sets `name` from `this.constructor.name`. Next.js minifies the server bundle, so
+ * the class `JWSInvalid` is renamed and a refusal that should read
+ *
+ *   JWSInvalid: JWS Protected Header is invalid
+ *
+ * reaches the agent as
+ *
+ *   i: JWS Protected Header is invalid
+ *
+ * — observed on northbound.camp, not imagined. The message survives because it is a string
+ * literal; only the identifier is mangled. jose also sets a stable `code` on every error
+ * (`ERR_JWS_INVALID`, `ERR_JWT_CLAIM_VALIDATION_FAILED`), which is a literal too and so says
+ * the same thing in a build as it does in a dev server. Prefer it, and keep the name as the
+ * fallback for errors from anywhere else — the database and `fetch` throw here as well.
+ */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const code = (error as { code?: unknown }).code;
+  const label = typeof code === 'string' && code ? code : error.name;
+  return label ? `${label}: ${error.message}` : error.message;
+}
+
+/**
  * What a token amounts to here: a session, or the reason there isn't one.
  *
  * The reason is carried out rather than only logged so a deployment can choose to tell
@@ -237,7 +263,7 @@ export async function inspectAgentToken(token: string): Promise<AgentTokenResult
       // actually sent; `aud` passes when the token names ANY of the expected ones, so an
       // aud failure during a migration shows both lists side by side and says which step
       // has not been taken.
-      return reject(String(error), {
+      return reject(describeError(error), {
         expected: { iss: issuer, aud: audience ?? null },
         got: { iss: claims?.iss ?? null, aud: claims?.aud ?? null, exp: claims?.exp ?? null },
       });
@@ -303,6 +329,6 @@ export async function inspectAgentToken(token: string): Promise<AgentTokenResult
     return { session: { customer, agent, email: payload.email, scopes, ...(jkt === undefined ? {} : { jkt }) } };
   } catch (error) {
     // Discovery, introspection and the database land here.
-    return reject(String(error));
+    return reject(describeError(error));
   }
 }
