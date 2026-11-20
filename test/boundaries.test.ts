@@ -78,6 +78,21 @@ const AGENT_METADATA_ROUTE = join(
   'app', '.well-known', 'oauth-protected-resource', 'api', 'agent', 'v1', 'route.ts',
 );
 
+/**
+ * THE CUSTOMER APP API: the Northbound iOS app's own surface, and not part of the graft.
+ *
+ * The app signs the customer in with Descope, so it needs an endpoint that accepts a bearer
+ * token, which is vocabulary the storefront otherwise never uses. It is excluded from the
+ * vocabulary scan the same way the agent API is, and for the same reason: so that it sits in
+ * named places. It is the opposite of the agent API in what it accepts — the customer's own
+ * session only, never a token that names an actor — and nothing advertises it to agents.
+ */
+const APP_API_DIRS = [join('app', 'api', 'app'), join('lib', 'appSession'), join('lib', 'api', 'appBearer.ts')];
+
+function inAppApi(file: string): boolean {
+  return APP_API_DIRS.some((dir) => file.startsWith(dir));
+}
+
 function inAgentApi(file: string): boolean {
   return AGENT_API_DIRS.some((dir) => file.startsWith(dir));
 }
@@ -141,6 +156,7 @@ const AGENT_AWARE_FILES = [
   join('app', 'login', 'page.tsx'),
   join('app', 'orders', '[orderNumber]', 'page.tsx'),
   join('app', 'orders', 'page.tsx'),
+  join('app', 'api', 'app', 'v1', 'assistants', 'route.ts'),
   join('lib', 'appSession', 'descope.ts'),
   join('lib', 'auth', 'session-cookie.ts'),
 ].sort();
@@ -175,6 +191,7 @@ describe('sub-project A contains no agent concepts', () => {
       if (file === AGENT_METADATA_ROUTE) continue;
       if (file.startsWith(AGENT_DIR)) continue;
       if (inAgentApi(file)) continue;
+      if (inAppApi(file)) continue;
       if (inBrowserSession(file)) continue;
 
       const code = stripComments(readFileSync(file, 'utf8'));
@@ -194,10 +211,29 @@ describe('sub-project A contains no agent concepts', () => {
   it('adds no routes to the storefront, and nothing under /api outside the agent API', () => {
     const routes = sourceFiles('app').filter((f) => /route\.tsx?$/.test(f)).sort();
     const storefront = routes.filter((f) =>
-      !inAgentApi(f) && !inBrowserSession(f) && f !== AGENT_METADATA_ROUTE);
+      !inAgentApi(f) && !inAppApi(f) && !inBrowserSession(f) && f !== AGENT_METADATA_ROUTE);
 
     expect(storefront).toEqual([POPPY_ROUTE, LEGACY_ROUTE].sort());
-    expect(sourceFiles(join('app', 'api')).filter((f) => !inAgentApi(f))).toEqual([]);
+    expect(sourceFiles(join('app', 'api')).filter((f) => !inAgentApi(f) && !inAppApi(f))).toEqual([]);
+  });
+
+  // The app's endpoints, named one by one for the same reason the agent's are.
+  it('exposes exactly the customer app endpoints it means to', () => {
+    const routes = sourceFiles('app').filter((f) => /route\.tsx?$/.test(f)).filter(inAppApi).sort();
+    expect(routes).toEqual([
+      join('app', 'api', 'app', 'v1', 'assistants', 'route.ts'),
+      join('app', 'api', 'app', 'v1', 'categories', 'route.ts'),
+      join('app', 'api', 'app', 'v1', 'me', 'route.ts'),
+      join('app', 'api', 'app', 'v1', 'orders', '[orderNumber]', 'route.ts'),
+      join('app', 'api', 'app', 'v1', 'orders', 'route.ts'),
+    ].sort());
+  });
+
+  // Like the agent API, the app's routes are a surface over the services.
+  it('builds the customer app API on the services rather than on the database', () => {
+    const offenders = sourceFiles(join('app', 'api', 'app'))
+      .filter((file) => /@\/db\//.test(stripComments(readFileSync(file, 'utf8')).replace(/^import type .*$/gm, '')));
+    expect(offenders).toEqual([]);
   });
 
   // Named one by one, so adding an endpoint is a line in this file and therefore a line
