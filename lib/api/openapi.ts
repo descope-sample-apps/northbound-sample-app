@@ -40,7 +40,9 @@ export function openApiDocument(baseUrl: string, openIdConnectUrl?: string) {
       description:
         'Browse Northbound, build the customer\'s cart and place orders for them. '
         + 'Browsing is public. Everything else needs an access token the customer approved '
-        + 'for their assistant, sent as `Authorization: Bearer <token>`. '
+        + 'for their assistant, sent as `Authorization: Bearer <token>` — or, when the '
+        + 'authorization server bound the token to a key, as `Authorization: DPoP <token>` '
+        + 'with an RFC 9449 proof in the `DPoP` header. '
         + `Reading needs ${SCOPE_READ}; changing the cart or placing an order needs `
         + `${SCOPE_WRITE}, which also satisfies a read. `
         + 'Sign-in is described in /.well-known/poppy.json, and the authorization server '

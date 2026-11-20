@@ -45,9 +45,21 @@ const REASON_LIMIT = 200;
 export function refusedBecause(reason: string): string {
   if (process.env.AGENT_DEBUG_REFUSALS !== 'true') return REFUSED;
 
-  const flat = reason.replace(/[^ -~]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const flat = headerSafe(reason);
   if (!flat) return REFUSED;
 
-  const short = flat.length > REASON_LIMIT ? `${flat.slice(0, REASON_LIMIT - 3)}...` : flat;
-  return `${REFUSED.slice(0, -1)} (${short}).`;
+  return `${REFUSED.slice(0, -1)} (${flat}).`;
+}
+
+/**
+ * A string safe to put in a header value, however it was built.
+ *
+ * Split out of refusedBecause because lib/api/dpop.ts needs the flattening without the
+ * flag: a proof failure is always said out loud, since it describes only what the caller
+ * itself just sent. It still quotes that caller's own `htu` and method, which are
+ * attacker-supplied, and so must not be able to carry a newline into WWW-Authenticate.
+ */
+export function headerSafe(reason: string): string {
+  const flat = reason.replace(/[^ -~]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return flat.length > REASON_LIMIT ? `${flat.slice(0, REASON_LIMIT - 3)}...` : flat;
 }

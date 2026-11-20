@@ -1,9 +1,10 @@
 import { inspectAgentToken, type AgentSession } from '@/lib/agentSession/descope';
 import { ServiceError } from '@/lib/services/errors';
 import { refusedBecause } from './refusal';
-import { resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
+import { DPOP_ALGS, checkTokenBinding, presentedToken, proofRefusal } from './dpop';
+import { requestTarget, resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
 
-export { API_BASE_PATH, apiBaseUrl, publicOrigin, resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
+export { API_BASE_PATH, apiBaseUrl, publicOrigin, requestTarget, resourceMetadataUrl, SCOPE_READ, SCOPE_WRITE } from './resource';
 
 /**
  * The agent API's transport layer: bearer tokens in, status codes out.
@@ -27,6 +28,11 @@ export function jsonResponse(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 }
 
+/** The scheme name to answer in, spelled as the RFCs spell it. */
+function scheme(presented: 'bearer' | 'dpop'): 'Bearer' | 'DPoP' {
+  return presented === 'dpop' ? 'DPoP' : 'Bearer';
+}
+
 function quote(value: string): string {
   // auth-param values are quoted-string: backslash and quote have to be escaped or the
   // header stops parsing where the value was supposed to continue.
@@ -44,11 +50,16 @@ function challenge(
   error: string | undefined,
   description: string,
   scope?: string,
+  scheme: 'Bearer' | 'DPoP' = 'Bearer',
 ): Response {
   const params = [
     error ? `error=${quote(error)}` : undefined,
     error ? `error_description=${quote(description)}` : undefined,
     scope ? `scope=${quote(scope)}` : undefined,
+    // RFC 9449 section 5: a DPoP challenge names the algorithms this store will verify a
+    // proof with, so a client whose key is of the wrong kind learns it from the refusal
+    // rather than from a second attempt that fails the same way.
+    scheme === 'DPoP' ? `algs=${quote(DPOP_ALGS.join(' '))}` : undefined,
     `resource_metadata=${quote(resourceMetadataUrl(request))}`,
   ].filter(Boolean);
 
@@ -57,19 +68,11 @@ function challenge(
     {
       status,
       headers: {
-        'www-authenticate': `Bearer ${params.join(', ')}`,
+        'www-authenticate': `${scheme} ${params.join(', ')}`,
         'cache-control': 'no-store',
       },
     },
   );
-}
-
-/** The token from `Authorization: Bearer …`, or null. The scheme is case-insensitive. */
-function bearerToken(request: Request): string | null {
-  const header = request.headers.get('authorization');
-  if (!header) return null;
-  const match = /^Bearer[ ]+(.+)$/i.exec(header.trim());
-  return match ? match[1].trim() : null;
 }
 
 /**
@@ -139,8 +142,13 @@ type AgentHandler<C> = (
  */
 export function withAgent<C = unknown>(need: Need, handler: AgentHandler<C>) {
   return async (request: Request, context: C): Promise<Response> => {
-    const token = bearerToken(request);
-    if (!token) {
+    // Bearer OR DPoP. Which one an agent must use is the authorization server's call and
+    // not this store's: Descope advertises DPoP, so a Poppy agent binds its token to a key
+    // it holds and RFC 9449 section 7.1 then requires the DPoP scheme. Reading only Bearer
+    // here is what made a correctly signed-in agent look like one that sent no token at
+    // all — and told it so, which is not a refusal anyone can act on.
+    const presented = presentedToken(request);
+    if (!presented) {
       return challenge(
         request,
         401,
@@ -149,11 +157,37 @@ export function withAgent<C = unknown>(need: Need, handler: AgentHandler<C>) {
       );
     }
 
-    const { session, reason } = await inspectAgentToken(token);
+    const { session, reason } = await inspectAgentToken(presented.token);
     if (!session) {
       // The reason is always on the log; whether the agent hears it is refusedBecause's
       // decision, and it says no unless this deployment asked otherwise.
-      return challenge(request, 401, 'invalid_token', refusedBecause(reason));
+      return challenge(
+        request,
+        401,
+        'invalid_token',
+        refusedBecause(reason),
+        undefined,
+        scheme(presented.scheme),
+      );
+    }
+
+    // The token is genuine. Whether THIS caller is the one it was issued to is a separate
+    // question, and only a token bound to a key can answer it.
+    const bound = await checkTokenBinding({
+      request,
+      presented,
+      jkt: session.jkt,
+      url: requestTarget(request),
+    });
+    if (!bound.ok) {
+      return challenge(
+        request,
+        401,
+        'invalid_dpop_proof',
+        proofRefusal(bound.reason),
+        undefined,
+        'DPoP',
+      );
     }
 
     if (!allows(session.scopes, need)) {
@@ -164,6 +198,7 @@ export function withAgent<C = unknown>(need: Need, handler: AgentHandler<C>) {
         'insufficient_scope',
         `The customer has not approved ${scope} for this assistant.`,
         scope,
+        scheme(presented.scheme),
       );
     }
 

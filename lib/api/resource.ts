@@ -105,6 +105,19 @@ export function organizationDomain(request: Request): string {
   return new URL(publicOrigin(request)).host;
 }
 
+/**
+ * The URL a DPoP proof has to name: origin and path, no query, no fragment (RFC 9449
+ * section 4.2).
+ *
+ * BUILT FROM publicOrigin, NOT FROM request.url. Northbound sits behind the Agent Edge
+ * worker and then Vercel, so request.url carries the internal URL while the agent signed
+ * its proof over the public one. Comparing against request.url would refuse every proof
+ * in production and accept every proof on a dev server, which is the worst way round.
+ */
+export function requestTarget(request: Request): string {
+  return `${publicOrigin(request)}${new URL(request.url).pathname}`;
+}
+
 /** The resource identifier this API is known by: the string tokens are minted for. */
 export function apiBaseUrl(request: Request): string {
   return `${publicOrigin(request)}${API_BASE_PATH}`;
