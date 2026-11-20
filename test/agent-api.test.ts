@@ -365,6 +365,17 @@ describe('the catalog', () => {
     expect(body.products[0].url).not.toContain('/products/');
   });
 
+  // The photo path really is the plural one, with an extension — it is a file in public/,
+  // not the page. Said outright so nobody has to work out that the two differ.
+  it('gives each product the URL of its photo', async () => {
+    const { GET } = await import('@/app/api/agent/v1/products/route');
+
+    const res = await GET(request('/api/agent/v1/products?q=mug'));
+
+    const body = await res.json();
+    expect(body.products[0].image_url).toBe(`${ORIGIN}/products/trail-mug.webp`);
+  });
+
   // The two halves of that promise live in different files, so this is what stops them
   // drifting: the URL above is only true while a page answers at that path.
   it('names a path the website actually serves', () => {

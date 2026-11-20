@@ -77,6 +77,12 @@ export function openApiDocument(baseUrl: string, openIdConnectUrl?: string) {
                 + 'building a URL from the slug — the page is /product/{slug}, which is '
                 + 'not the plural path this API is served on.',
             },
+            image_url: {
+              type: 'string',
+              format: 'uri',
+              description: 'The photo the storefront shows, for an assistant that can '
+                + 'draw one.',
+            },
           },
         },
         OrderSummary: {
@@ -149,6 +155,7 @@ export function openApiDocument(baseUrl: string, openIdConnectUrl?: string) {
                     format: 'uri',
                     description: 'The product page, the same link listProducts gives.',
                   },
+                  image_url: { type: 'string', format: 'uri' },
                 },
               },
             },
