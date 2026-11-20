@@ -210,6 +210,23 @@ describe('the cart', () => {
     expect(cart.items[0].quantity).toBe(2);
   });
 
+  // The same link the catalog gives, from the same helper, so "what is in my cart" can
+  // be a list a customer can open rather than a list of names.
+  it('links each line to the product page', async () => {
+    signedIn(ids.alice, ['orders:write']);
+    const { POST } = await import('@/app/api/agent/v1/cart/items/route');
+    const body = JSON.stringify({ slug: 'trail-mug', quantity: 1 });
+
+    const res = await POST(
+      request('/api/agent/v1/cart/items', { method: 'POST', token: 'good-token', body }),
+      undefined,
+    );
+
+    const cart = (await res.json()).cart;
+    expect(cart.items[0].url).toBe(`${ORIGIN}/product/trail-mug`);
+    expect(cart.items[0].url).not.toContain('/products/');
+  });
+
   it('removes the line at quantity 0', async () => {
     signedIn(ids.alice, ['orders:write']);
     const { POST } = await import('@/app/api/agent/v1/cart/items/route');

@@ -128,7 +128,30 @@ export function openApiDocument(baseUrl: string, openIdConnectUrl?: string) {
         Cart: {
           type: 'object',
           properties: {
-            items: { type: 'array', items: { type: 'object' } },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  slug: { type: 'string' },
+                  name: { type: 'string' },
+                  quantity: { type: 'integer' },
+                  unit_price: { type: 'string', examples: ['$650.00'] },
+                  unit_price_cents: { type: 'integer' },
+                  line_total: { type: 'string' },
+                  line_total_cents: { type: 'integer' },
+                  in_stock: {
+                    type: 'boolean',
+                    description: 'False once the catalog can no longer fill this line.',
+                  },
+                  url: {
+                    type: 'string',
+                    format: 'uri',
+                    description: 'The product page, the same link listProducts gives.',
+                  },
+                },
+              },
+            },
             total_cents: {
               type: 'integer',
               description: 'What placing an order right now would charge. Send this as '

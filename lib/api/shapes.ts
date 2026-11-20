@@ -19,6 +19,21 @@ import type { OrderDetail, OrderSummary } from '@/lib/services/orders';
 
 export type ProductShape = ReturnType<typeof productShape>;
 
+/**
+ * Where a product lives on the website.
+ *
+ * SAID RATHER THAN LEFT TO BE GUESSED. An assistant that names a product wants to link
+ * it, and without this the only hint it has is the API's own path — /products, plural,
+ * while the page is app/product/[slug], singular. Assistants have guessed the plural and
+ * sent customers to a 404.
+ *
+ * One function because the catalog and the cart both hand this out, and a store that
+ * renamed the route would otherwise have two places to remember.
+ */
+function productUrl(origin: string, slug: string) {
+  return `${origin}/product/${slug}`;
+}
+
 export function productShape(product: Product, origin: string) {
   return {
     slug: product.slug,
@@ -28,17 +43,11 @@ export function productShape(product: Product, origin: string) {
     price_cents: product.priceCents,
     in_stock: product.stockQty > 0,
     stock_quantity: product.stockQty,
-    // WHERE THIS PRODUCT LIVES ON THE WEB, said rather than left to be guessed. An
-    // assistant that names a product to the customer wants to link it, and without this
-    // the only hint it has is the API's own path — which is /products (plural), while the
-    // page is app/product/[slug] (singular). Agents have guessed the plural and sent
-    // customers to a 404. The orders above have carried their `url` from the start; this
-    // is the same promise for the catalog.
-    url: `${origin}/product/${product.slug}`,
+    url: productUrl(origin, product.slug),
   };
 }
 
-export function cartShape(cart: CartView) {
+export function cartShape(cart: CartView, origin: string) {
   return {
     items: cart.items.map((line) => ({
       slug: line.slug,
@@ -49,6 +58,10 @@ export function cartShape(cart: CartView) {
       line_total: formatCents(line.lineTotalCents),
       line_total_cents: line.lineTotalCents,
       in_stock: line.isActive && line.stockQty >= line.quantity,
+      // The same link the catalog gives, so "show me what is in my cart" can be a list
+      // of links rather than a list of names. A line that has gone out of stock is the
+      // one a customer most wants to open.
+      url: productUrl(origin, line.slug),
     })),
     subtotal_cents: cart.subtotalCents,
     shipping_cents: cart.shippingCents,

@@ -1,4 +1,4 @@
-import { withAgent, jsonResponse } from '@/lib/api/bearer';
+import { withAgent, jsonResponse, publicOrigin } from '@/lib/api/bearer';
 import { cartShape } from '@/lib/api/shapes';
 import { getCart } from '@/lib/services/cart';
 
@@ -14,12 +14,12 @@ export const dynamic = 'force-dynamic';
  *
  * total_cents here is what POST /orders should be given as expected_total_cents.
  */
-export const GET = withAgent('read', async (_request, session) => {
+export const GET = withAgent('read', async (request, session) => {
   const cart = await getCart({ customerId: session.customer.id });
 
   return jsonResponse({
     acting_for: session.email,
     actor: session.agent,
-    cart: cartShape(cart),
+    cart: cartShape(cart, publicOrigin(request)),
   });
 });
