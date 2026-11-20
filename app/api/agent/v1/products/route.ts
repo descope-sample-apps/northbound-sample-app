@@ -1,4 +1,4 @@
-import { withPublic, badRequest, jsonResponse } from '@/lib/api/bearer';
+import { withPublic, badRequest, jsonResponse, publicOrigin } from '@/lib/api/bearer';
 import { productShape } from '@/lib/api/shapes';
 import { searchProducts } from '@/lib/services/catalog';
 
@@ -42,8 +42,9 @@ export const GET = withPublic(async (request) => {
     perPage,
   });
 
+  const origin = publicOrigin(request);
   return jsonResponse({
-    products: items.map(productShape),
+    products: items.map((product) => productShape(product, origin)),
     total,
     page,
     per_page: perPage,

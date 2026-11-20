@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { existsSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import * as schema from '@/db/schema';
 import { withTestDb, seedMinimal, type TestDb } from './harness';
@@ -332,6 +333,25 @@ describe('the catalog', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.products.map((p: { slug: string }) => p.slug)).toEqual(['trail-mug']);
+  });
+
+  // THE LINK, SAID RATHER THAN GUESSED. An assistant that names a product wants to link
+  // it, and the only hint it had was this API's own path — /products, plural, while the
+  // page is singular. Assistants guessed the plural and sent customers to a 404.
+  it('gives each product the URL of its page', async () => {
+    const { GET } = await import('@/app/api/agent/v1/products/route');
+
+    const res = await GET(request('/api/agent/v1/products?q=mug'));
+
+    const body = await res.json();
+    expect(body.products[0].url).toBe(`${ORIGIN}/product/trail-mug`);
+    expect(body.products[0].url).not.toContain('/products/');
+  });
+
+  // The two halves of that promise live in different files, so this is what stops them
+  // drifting: the URL above is only true while a page answers at that path.
+  it('names a path the website actually serves', () => {
+    expect(existsSync('app/product/[slug]/page.tsx')).toBe(true);
   });
 });
 

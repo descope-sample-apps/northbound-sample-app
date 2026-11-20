@@ -58,6 +58,27 @@ export function openApiDocument(baseUrl: string, openIdConnectUrl?: string) {
           description: 'Every amount appears twice: integer cents to compute with, and a '
             + 'formatted string to repeat to the customer.',
         },
+        Product: {
+          type: 'object',
+          description: 'One item in the catalog. `slug` is what the cart is built from; '
+            + '`url` is where to send the customer.',
+          properties: {
+            slug: { type: 'string', description: 'The id the cart and this API use.' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            price: { type: 'string', examples: ['$650.00'] },
+            price_cents: { type: 'integer' },
+            in_stock: { type: 'boolean' },
+            stock_quantity: { type: 'integer' },
+            url: {
+              type: 'string',
+              format: 'uri',
+              description: 'The product page on the website. Link to this rather than '
+                + 'building a URL from the slug — the page is /product/{slug}, which is '
+                + 'not the plural path this API is served on.',
+            },
+          },
+        },
         OrderSummary: {
           type: 'object',
           properties: {
@@ -142,14 +163,35 @@ export function openApiDocument(baseUrl: string, openIdConnectUrl?: string) {
         get: {
           operationId: 'listProducts',
           summary: 'Search the catalog',
-          description: 'Public. Returns product slugs, which is what the cart is built from.',
+          description: 'Public. Returns product slugs, which is what the cart is built '
+            + 'from, and the page URL to link the customer to.',
           parameters: [
             { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Name search.' },
             { name: 'category', in: 'query', schema: { type: 'string' } },
             { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } },
             { name: 'per_page', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 50 } },
           ],
-          responses: { 200: { description: 'Matching products.' } },
+          responses: {
+            200: {
+              description: 'Matching products.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      products: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/Product' },
+                      },
+                      total: { type: 'integer' },
+                      page: { type: 'integer' },
+                      per_page: { type: 'integer' },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       '/cart': {

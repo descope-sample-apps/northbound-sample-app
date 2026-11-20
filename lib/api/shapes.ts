@@ -19,7 +19,7 @@ import type { OrderDetail, OrderSummary } from '@/lib/services/orders';
 
 export type ProductShape = ReturnType<typeof productShape>;
 
-export function productShape(product: Product) {
+export function productShape(product: Product, origin: string) {
   return {
     slug: product.slug,
     name: product.name,
@@ -28,6 +28,13 @@ export function productShape(product: Product) {
     price_cents: product.priceCents,
     in_stock: product.stockQty > 0,
     stock_quantity: product.stockQty,
+    // WHERE THIS PRODUCT LIVES ON THE WEB, said rather than left to be guessed. An
+    // assistant that names a product to the customer wants to link it, and without this
+    // the only hint it has is the API's own path — which is /products (plural), while the
+    // page is app/product/[slug] (singular). Agents have guessed the plural and sent
+    // customers to a 404. The orders above have carried their `url` from the start; this
+    // is the same promise for the catalog.
+    url: `${origin}/product/${product.slug}`,
   };
 }
 
