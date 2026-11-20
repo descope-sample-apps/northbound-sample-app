@@ -128,6 +128,10 @@ function inBrowserSession(file: string): boolean {
  * token, a scope or a session; `orders.placed_by_agent` is already theirs. If one of them
  * ever reaches for lib/agentSession for anything else, that is a different change and
  * deserves a different argument.
+ *
+ * The customer app API (lib/appSession, app/api/app) is the same storefront feature on the
+ * phone: the customer's own session, never an agent's. It reaches in for the demo signup the
+ * agent path already does, and for the assistants list the account page shows.
  */
 const AGENT_AWARE_FILES = [
   join('app', 'account', 'actions.ts'),
@@ -137,6 +141,7 @@ const AGENT_AWARE_FILES = [
   join('app', 'login', 'page.tsx'),
   join('app', 'orders', '[orderNumber]', 'page.tsx'),
   join('app', 'orders', 'page.tsx'),
+  join('lib', 'appSession', 'descope.ts'),
   join('lib', 'auth', 'session-cookie.ts'),
 ].sort();
 
