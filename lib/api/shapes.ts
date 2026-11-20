@@ -44,6 +44,10 @@ export function productShape(product: Product, origin: string) {
     in_stock: product.stockQty > 0,
     stock_quantity: product.stockQty,
     url: productUrl(origin, product.slug),
+    // The picture the storefront shows, for an assistant whose interface can draw one. It
+    // is `/products/<slug>.webp` — plural, with an extension, and so not the page URL
+    // above with a suffix. Another thing worth saying rather than leaving to be worked out.
+    image_url: `${origin}${product.imagePath}`,
   };
 }
 
@@ -62,6 +66,7 @@ export function cartShape(cart: CartView, origin: string) {
       // of links rather than a list of names. A line that has gone out of stock is the
       // one a customer most wants to open.
       url: productUrl(origin, line.slug),
+      image_url: `${origin}${line.imagePath}`,
     })),
     subtotal_cents: cart.subtotalCents,
     shipping_cents: cart.shippingCents,
