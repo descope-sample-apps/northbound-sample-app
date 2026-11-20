@@ -30,6 +30,15 @@ export type AgentSession = {
   email: string;
   /** What the customer allowed it to do, from the token's scope claim. */
   scopes: string[];
+  /**
+   * The thumbprint of the key this token is bound to: its `cnf.jkt` (RFC 9449), or
+   * undefined when the authorization server did not bind it.
+   *
+   * Carried out of the verifier rather than re-read from the token by the caller, because
+   * lib/api/dpop.ts compares a proof's key against this one and that comparison is only
+   * worth anything against a claim jwtVerify has already vouched for.
+   */
+  jkt?: string;
 };
 
 let keys: { url: string; issuer: string; jwks: ReturnType<typeof createRemoteJWKSet> } | undefined;
@@ -234,6 +243,11 @@ export async function inspectAgentToken(token: string): Promise<AgentTokenResult
       });
     }
 
+    // RFC 9449: a bound token names the key it belongs to here. Read from the VERIFIED
+    // payload, so the proof in lib/api/dpop.ts is checked against a thumbprint the
+    // authorization server signed rather than one the caller wrote.
+    const cnf = payload.cnf as { jkt?: unknown } | undefined;
+    const jkt = typeof cnf?.jkt === 'string' ? cnf.jkt : undefined;
     const agent = (payload.act as { sub?: unknown } | undefined)?.sub;
     if (typeof payload.email !== 'string') return reject('token carries no email claim');
     if (typeof agent !== 'string') return reject('token carries no act.sub claim');
@@ -286,7 +300,7 @@ export async function inspectAgentToken(token: string): Promise<AgentTokenResult
       customer: customer.id,
       scopes,
     }));
-    return { session: { customer, agent, email: payload.email, scopes } };
+    return { session: { customer, agent, email: payload.email, scopes, ...(jkt === undefined ? {} : { jkt }) } };
   } catch (error) {
     // Discovery, introspection and the database land here.
     return reject(String(error));

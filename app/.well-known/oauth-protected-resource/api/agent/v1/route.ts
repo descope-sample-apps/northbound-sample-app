@@ -1,4 +1,5 @@
 import { apiBaseUrl, SCOPE_READ, SCOPE_WRITE } from '@/lib/api/bearer';
+import { DPOP_ALGS } from '@/lib/api/dpop';
 import { authorizationServer } from '@/lib/api/issuer';
 
 export const dynamic = 'force-dynamic';
@@ -60,6 +61,13 @@ export async function GET(request: Request) {
       // The two scopes Northbound issues, described for people in poppy.json's auth.scopes.
       scopes_supported: [SCOPE_READ, SCOPE_WRITE],
       bearer_methods_supported: ['header'],
+      // RFC 9728 section 2, RFC 9449. Descope binds an agent's access token to a key when
+      // the agent asks, and the token then has to arrive as `Authorization: DPoP …` with a
+      // proof. Saying so here is how a client learns this store will check that proof
+      // rather than quietly ignore it; `required: false` because a token the authorization
+      // server did not bind is still accepted as a plain bearer token.
+      dpop_signing_alg_values_supported: [...DPOP_ALGS],
+      dpop_bound_access_tokens_required: false,
       resource_documentation: `${resource}/openapi.json`,
     },
     { headers: { 'cache-control': 'public, max-age=300' } },

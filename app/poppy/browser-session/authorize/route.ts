@@ -1,6 +1,8 @@
 import { inspectAgentToken } from '@/lib/agentSession/descope';
 import { SCOPE_BROWSER_SIGN_IN, authorizeJoin } from '@/lib/agentSession/browserJoin';
 import { refusedBecause } from '@/lib/api/refusal';
+import { DPOP_ALGS, checkTokenBinding, presentedToken, proofRefusal } from '@/lib/api/dpop';
+import { requestTarget } from '@/lib/api/resource';
 
 /**
  * The Poppy browser-session endpoint, step 2: the assistant authorizes a code.
@@ -45,11 +47,16 @@ export async function POST(request: Request): Promise<Response> {
   const poppySession = request.headers.get('poppy-session');
   if (!poppySession) return invalidRequest();
 
-  const bearer = /^Bearer[ ]+(.+)$/i.exec((request.headers.get('authorization') ?? '').trim());
-  const token = bearer ? bearer[1].trim() : null;
+  // Bearer or DPoP, for the reason lib/api/dpop.ts gives: a Poppy agent whose issuer
+  // advertises DPoP binds its token to a key, and RFC 9449 then requires the DPoP scheme.
+  // This endpoint read only Bearer too, so an agent that could not call the API could not
+  // join a browser either — and here the failure is quieter still, because nothing renders
+  // a body, just a browser that never signs in.
+  const presented = presentedToken(request);
+  const token = presented?.token ?? null;
 
   let accessToken: string | null = null;
-  if (token) {
+  if (presented && token) {
     const { session, reason } = await inspectAgentToken(token);
     if (!session) {
       // The reason is always on the log; refusedBecause decides whether the agent hears
@@ -61,7 +68,29 @@ export async function POST(request: Request): Promise<Response> {
         {
           status: 401,
           headers: {
-            'www-authenticate': 'Bearer error="invalid_token"',
+            'www-authenticate': `${presented.scheme === 'dpop' ? 'DPoP' : 'Bearer'} error="invalid_token"`,
+            'cache-control': 'no-store',
+          },
+        },
+      );
+    }
+
+    // A genuine token, but is this the agent it was issued to? Same check as the API's,
+    // and for the same reason: a bound token accepted without its proof is a bearer token
+    // again, and this is the request that decides whose account a browser acts as.
+    const bound = await checkTokenBinding({
+      request,
+      presented,
+      jkt: session.jkt,
+      url: requestTarget(request),
+    });
+    if (!bound.ok) {
+      return Response.json(
+        { error: 'invalid_dpop_proof', error_description: proofRefusal(bound.reason) },
+        {
+          status: 401,
+          headers: {
+            'www-authenticate': `DPoP error="invalid_dpop_proof", algs="${DPOP_ALGS.join(' ')}"`,
             'cache-control': 'no-store',
           },
         },
@@ -81,7 +110,7 @@ export async function POST(request: Request): Promise<Response> {
         {
           status: 403,
           headers: {
-            'www-authenticate': `Bearer error="insufficient_scope", scope="${SCOPE_BROWSER_SIGN_IN}"`,
+            'www-authenticate': `${presented.scheme === 'dpop' ? 'DPoP' : 'Bearer'} error="insufficient_scope", scope="${SCOPE_BROWSER_SIGN_IN}"`,
             'cache-control': 'no-store',
           },
         },
